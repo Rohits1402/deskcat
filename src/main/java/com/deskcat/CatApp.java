@@ -1,8 +1,10 @@
 package com.deskcat;
 
+import java.awt.CheckboxMenuItem;
 import java.awt.GraphicsConfiguration;
 import java.awt.GraphicsEnvironment;
 import java.awt.Insets;
+import java.awt.Menu;
 import java.awt.MenuItem;
 import java.awt.MouseInfo;
 import java.awt.Point;
@@ -171,63 +173,7 @@ public class CatApp extends ApplicationAdapter {
         fboCam = new OrthographicCamera();
         fboCam.setToOrtho(false, FBO_W, FBO_H);
 
-        if ("squirtle".equalsIgnoreCase(skin)) {
-            eyeStyle = 2;
-            attackType = 2;
-            bodyTex = PixelArt.squirtleBody();
-            tailTex = PixelArt.squirtleTail();
-            tailX = 26;
-            eyeLX = 11;
-            eyeRX = 20;
-            eyeW = 3;
-            eyeH = 4;
-            eyeY = 16;
-            eyeCenterX = 16.5f;
-            eyeCenterY = 17.5f;
-            furColor = C_BLUE;
-            irisColor = C_IRIS_BROWN;
-            pawTex = PixelArt.fromMap(PixelArt.PAW_SQUIRT);
-        } else if ("pikachu".equalsIgnoreCase(skin)) {
-            eyeStyle = 1;
-            attackType = 1;
-            bodyTex = PixelArt.fromMap(PixelArt.PIKA_BODY);
-            tailTex = new Texture[] {
-                    PixelArt.fromMap(PixelArt.PIKA_TAIL_A),
-                    PixelArt.fromMap(PixelArt.PIKA_TAIL_B),
-                    PixelArt.fromMap(PixelArt.PIKA_TAIL_C),
-            };
-            tailX = 27;
-            eyeLX = 9;
-            eyeRX = 20;
-            eyeW = 3;
-            eyeH = 3;
-            eyeY = 15;
-            eyeCenterX = 15.5f;
-            eyeCenterY = 16f;
-            furColor = C_YELLOW;
-            irisColor = C_IRIS_GREEN;
-            pawTex = PixelArt.fromMap(PixelArt.PAW_PIKA);
-        } else {
-            eyeStyle = 0;
-            attackType = 0;
-            bodyTex = PixelArt.fromMap(PixelArt.BODY);
-            tailTex = new Texture[] {
-                    PixelArt.fromMap(PixelArt.TAIL_A),
-                    PixelArt.fromMap(PixelArt.TAIL_B),
-                    PixelArt.fromMap(PixelArt.TAIL_C),
-            };
-            tailX = 26;
-            eyeLX = 7;
-            eyeRX = 18;
-            eyeW = 4;
-            eyeH = 3;
-            eyeY = 15;
-            eyeCenterX = 14f;
-            eyeCenterY = 16f;
-            furColor = C_ORANGE;
-            irisColor = C_IRIS_GREEN;
-            pawTex = PixelArt.fromMap(PixelArt.PAW_CAT);
-        }
+        applySkin(skin);
         waterDropTex = PixelArt.fromMap(PixelArt.WATER_DROP);
         heartTex = PixelArt.fromMap(PixelArt.HEART);
         zzzTex = PixelArt.fromMap(PixelArt.ZZZ);
@@ -331,6 +277,86 @@ public class CatApp extends ApplicationAdapter {
         }
     }
 
+    /** Load (or swap, at runtime) all skin-specific art and geometry. */
+    private void applySkin(String name) {
+        skin = name;
+        if (bodyTex != null) {
+            bodyTex.dispose();
+        }
+        if (tailTex != null) {
+            for (Texture t : tailTex) {
+                t.dispose();
+            }
+        }
+        if (pawTex != null) {
+            pawTex.dispose();
+        }
+        if ("squirtle".equalsIgnoreCase(name)) {
+            eyeStyle = 2;
+            attackType = 2;
+            bodyTex = PixelArt.squirtleBody();
+            tailTex = PixelArt.squirtleTail();
+            tailX = 26;
+            eyeLX = 11;
+            eyeRX = 20;
+            eyeW = 3;
+            eyeH = 4;
+            eyeY = 16;
+            eyeCenterX = 16.5f;
+            eyeCenterY = 17.5f;
+            furColor = C_BLUE;
+            irisColor = C_IRIS_BROWN;
+            pawTex = PixelArt.fromMap(PixelArt.PAW_SQUIRT);
+        } else if ("pikachu".equalsIgnoreCase(name)) {
+            eyeStyle = 1;
+            attackType = 1;
+            bodyTex = PixelArt.fromMap(PixelArt.PIKA_BODY);
+            tailTex = new Texture[] {
+                    PixelArt.fromMap(PixelArt.PIKA_TAIL_A),
+                    PixelArt.fromMap(PixelArt.PIKA_TAIL_B),
+                    PixelArt.fromMap(PixelArt.PIKA_TAIL_C),
+            };
+            tailX = 27;
+            eyeLX = 9;
+            eyeRX = 20;
+            eyeW = 3;
+            eyeH = 3;
+            eyeY = 15;
+            eyeCenterX = 15.5f;
+            eyeCenterY = 16f;
+            furColor = C_YELLOW;
+            irisColor = C_IRIS_GREEN;
+            pawTex = PixelArt.fromMap(PixelArt.PAW_PIKA);
+        } else {
+            eyeStyle = 0;
+            attackType = 0;
+            bodyTex = PixelArt.fromMap(PixelArt.BODY);
+            tailTex = new Texture[] {
+                    PixelArt.fromMap(PixelArt.TAIL_A),
+                    PixelArt.fromMap(PixelArt.TAIL_B),
+                    PixelArt.fromMap(PixelArt.TAIL_C),
+            };
+            tailX = 26;
+            eyeLX = 7;
+            eyeRX = 18;
+            eyeW = 4;
+            eyeH = 3;
+            eyeY = 15;
+            eyeCenterX = 14f;
+            eyeCenterY = 16f;
+            furColor = C_ORANGE;
+            irisColor = C_IRIS_GREEN;
+            pawTex = PixelArt.fromMap(PixelArt.PAW_CAT);
+        }
+        // drop any in-flight attack so it doesn't straddle two skins
+        boltLeft = 0f;
+        waterLeft = 0f;
+        alertLeft = 0f;
+        if (trayIcon != null) {
+            trayIcon.setToolTip("DeskCat - " + skin);
+        }
+    }
+
     private void setupKeyboardHook() {
         try {
             java.util.logging.Logger l = java.util.logging.Logger
@@ -354,15 +380,39 @@ public class CatApp extends ApplicationAdapter {
         }
     }
 
+    private static final String[] SKINS = {"squirtle", "pikachu", "cat"};
+
     private void setupTray() {
         try {
             if (!SystemTray.isSupported()) {
                 return;
             }
             PopupMenu menu = new PopupMenu();
-            MenuItem exit = new MenuItem("Exit DeskCat");
+
+            Menu skinMenu = new Menu("Skin");
+            final CheckboxMenuItem[] items = new CheckboxMenuItem[SKINS.length];
+            for (int i = 0; i < SKINS.length; i++) {
+                final int idx = i;
+                String label = Character.toUpperCase(SKINS[i].charAt(0))
+                        + SKINS[i].substring(1);
+                items[i] = new CheckboxMenuItem(label,
+                        SKINS[i].equalsIgnoreCase(skin));
+                items[i].addItemListener(e -> {
+                    for (int j = 0; j < items.length; j++) {
+                        items[j].setState(j == idx);
+                    }
+                    Gdx.app.postRunnable(() -> applySkin(SKINS[idx]));
+                });
+                skinMenu.add(items[i]);
+            }
+            menu.add(skinMenu);
+            menu.addSeparator();
+
+            MenuItem exit = new MenuItem("Quit DeskCat");
             exit.addActionListener(e -> Gdx.app.postRunnable(() -> Gdx.app.exit()));
-            trayIcon = new TrayIcon(trayImage(), "DeskCat", menu);
+            menu.add(exit);
+
+            trayIcon = new TrayIcon(trayImage(), "DeskCat - " + skin, menu);
             SystemTray.getSystemTray().add(trayIcon);
             trayOk = true;
         } catch (Throwable t) {

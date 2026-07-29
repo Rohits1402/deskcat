@@ -17,7 +17,7 @@ pixel-cat desktop pet for macOS/Windows.
 - Found an **unaffiliated Solana memecoin** ("AI Agent Comnyang") trading on
   the app's name — flagged as a thing the real developer should know about.
 - Drafted a help/FAQ page for the product
-  ([comnyang-help.md](comnyang-help.md)) before the project pivoted.
+  ([docs/comnyang-help.md](docs/comnyang-help.md)) before the project pivoted.
 
 ## 2. Pivot: build our own desk pet in libGDX
 
@@ -29,7 +29,7 @@ Environment found on the machine: JDK 8 (1.8.0_111), no system Gradle but a
 cached **Gradle 8.7** in `~/.gradle/wrapper/dists`, which is invoked directly.
 Later, adding a dependency exposed that the 2016-era JDK truststore no longer
 trusts Maven Central — fixed by pointing the build at the newer JRE 8u491
-certificate store via [gradle.properties](../gradle.properties).
+certificate store via [gradle.properties](gradle.properties).
 
 ## 3. Version 1 — the orange tabby
 
@@ -116,8 +116,8 @@ art, Squirtle first.
 
 ## 11. Git and GitHub
 
-- `git init` (branch `main`), [.gitignore](../.gitignore),
-  [README.md](../README.md), initial commit of the full project.
+- `git init` (branch `main`), [.gitignore](.gitignore),
+  [README.md](README.md), initial commit of the full project.
 - User installed GitHub CLI and authenticated as **Rohits1402**; the private
   repo **[Rohits1402/deskcat](https://github.com/Rohits1402/deskcat)** was
   created and pushed via `gh repo create --push`.
@@ -127,16 +127,38 @@ art, Squirtle first.
   GitHub profile), and the AI co-author trailer removed at the user's request
   — history rewritten and force-pushed while the repo had a single commit.
 
+## 12. Going public, collaborator onboarding, tray skin switcher
+
+- The repo was flipped from private to **public** at the user's request (the
+  README's personal-use disclaimer for the Pokémon skins is the operating
+  posture).
+- **Rajat Gurnani** accepted the collaborator invite and pushed the first
+  external commits: [CLAUDE.md](CLAUDE.md) (project guidance for Claude Code
+  sessions, including the plain-commit-message rule) and this devlog moved to
+  the repo root.
+- **Squirtle belly fix**: the brown shell rim showed as a pointed wedge
+  between the feet; the cream plastron ellipse was extended to the ground
+  line and the feet reordered on top of it.
+- **Tray skin switcher**: the tray menu gained a *Skin* submenu (Squirtle /
+  Pikachu / Cat, checkmark on the active one) that swaps the character live —
+  skin setup was extracted from `create()` into `applySkin()`, which disposes
+  the old skin's textures, cancels in-flight attacks, and runs on the GL
+  thread via `postRunnable`. Quit stays as its own item below a separator;
+  the tray tooltip shows the active skin.
+- `.gitignore` extended with IntelliJ artifacts (`.idea/`, `local.properties`).
+
 ## Current state
 
 - **Skins**: Squirtle (default, procedural), Pikachu (character maps), and
-  the original orange tabby. Launch: `gradle run --args="pikachu"` etc.
+  the original orange tabby — switchable live from the tray's Skin submenu,
+  or at launch via `gradle run --args="pikachu"` etc.
 - **Behaviors**: eye tracking, blink, tail animation, mochi drag, petting
   hearts, keyboard kneading, startle, click attacks (water gun /
   thunderbolt / startle), endless bottom-edge patrol with return-home, sleep,
-  tray Exit, no taskbar button.
-- **Repo**: one commit (`145b5d7`) on `main`; the plastron/belly fix and this
-  devlog are not yet committed.
+  tray menu (skin switcher + quit), no taskbar button.
+- **Repo**: public at
+  [github.com/Rohits1402/deskcat](https://github.com/Rohits1402/deskcat);
+  collaborators: Rohits1402 (owner), Rajat Gurnani (write).
 
 ## Backlog / ideas
 

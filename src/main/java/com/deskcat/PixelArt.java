@@ -314,9 +314,9 @@ public final class PixelArt {
         ell(g, gw, 15f, 19.5f, 9f, 6.5f, h);      // shell
         ell(g, gw, 5.5f, 18.5f, 2.5f, 3f, a);     // arms
         ell(g, gw, 24.5f, 18.5f, 2.5f, 3f, a);
-        ell(g, gw, 9.5f, 24.5f, 3f, 2f, a);       // feet
+        ell(g, gw, 15f, 21f, 5.5f, 5.3f, c);      // plastron, down to the ground
+        ell(g, gw, 9.5f, 24.5f, 3f, 2f, a);       // feet on top of it
         ell(g, gw, 20.5f, 24.5f, 3f, 2f, a);
-        ell(g, gw, 15f, 20.5f, 5.5f, 4.2f, c);    // plastron
         ell(g, gw, 15f, 9.5f, 8.5f, 7f, a);       // head
         outlinePass(g, gw, k);
         for (int x = 12; x <= 17; x++) {

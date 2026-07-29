@@ -1,5 +1,7 @@
 .gradle/
 build/
 .claude/
+.idea/
+local.properties
 *.class
 *.log

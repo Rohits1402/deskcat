@@ -21,7 +21,8 @@ taskbar-free window and reacts to what you do — inspired by desktop pets like
   and paces endlessly between the edges; any mouse or keyboard input sends it
   hurrying back to exactly where it was.
 - **Sleep** — after a minute of idle it dozes off with floating Zzz.
-- **System tray** — no taskbar button; a tray icon hosts the Exit menu.
+- **System tray** — no taskbar button; the tray icon hosts a live skin
+  switcher and the quit menu.
 
 ## Skins
 
@@ -49,7 +50,8 @@ gradle run --args="pikachu"
 gradle run --args="cat"
 ```
 
-Right-click the tray icon (yellow bolt) and choose Exit to quit.
+Right-click the tray icon (yellow bolt) to switch skins on the fly
+(Skin submenu) or to quit.
 
 ## How it works
 
