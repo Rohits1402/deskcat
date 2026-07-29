@@ -198,7 +198,7 @@ public class CatApp extends ApplicationAdapter {
     private int wanderState;
     private float wanderIn = 25f;
     private float fallVy, winXf;
-    private int floorY, walkTargetX;
+    private int floorY, patrolDir;
     private int homeX, homeY, patrolMinX, patrolMaxX;
     private float returnT, leapFromY;
     private boolean facingLeft;
@@ -1094,15 +1094,15 @@ public class CatApp extends ApplicationAdapter {
             }
             window.setPosition(window.getPositionX(), Math.round(ny));
         } else if (wanderState == 2) {
-            float dir = walkTargetX < winXf ? -1f : 1f;
-            facingLeft = dir < 0f;
-            winXf += dir * 85f * dt;
-            window.setPosition(Math.round(winXf), floorY);
-            if (Math.abs(winXf - walkTargetX) < 4f) {
-                // turn around at the screen edge and keep patrolling
-                walkTargetX = walkTargetX <= patrolMinX + 4
-                        ? patrolMaxX : patrolMinX;
+            facingLeft = patrolDir < 0;
+            winXf += patrolDir * 85f * dt;
+            // wraparound: walk fully off one edge, reappear at the other
+            if (patrolDir > 0 && winXf > patrolMaxX) {
+                winXf = patrolMinX - winW();
+            } else if (patrolDir < 0 && winXf + winW() < patrolMinX) {
+                winXf = patrolMaxX;
             }
+            window.setPosition(Math.round(winXf), floorY);
         } else if (wanderState == 3) {
             float dir = homeX < winXf ? -1f : 1f;
             facingLeft = dir < 0f;
@@ -1142,11 +1142,13 @@ public class CatApp extends ApplicationAdapter {
             floorY = b.y + b.height - ins.bottom - winH() - Math.max(0, bottomGap);
             homeX = window.getPositionX();
             homeY = window.getPositionY();
-            patrolMinX = b.x + 10;
-            patrolMaxX = b.x + b.width - winW() - 10;
-            walkTargetX = MathUtils.randomBoolean() ? patrolMinX : patrolMaxX;
+            // wrap bounds: full screen edges, so the pet leaves completely
+            // before reappearing on the far side
+            patrolMinX = b.x;
+            patrolMaxX = b.x + b.width;
+            patrolDir = MathUtils.randomBoolean() ? -1 : 1;
             winXf = homeX;
-            facingLeft = walkTargetX < winXf;
+            facingLeft = patrolDir < 0;
             fallVy = 0f;
             if (homeY < floorY - 4) {
                 wanderState = 1;

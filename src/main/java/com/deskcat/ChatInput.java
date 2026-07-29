@@ -2,6 +2,7 @@ package com.deskcat;
 
 import java.awt.Color;
 import java.awt.Font;
+import java.awt.Toolkit;
 import java.awt.Window;
 import java.awt.event.FocusAdapter;
 import java.awt.event.FocusEvent;
@@ -13,6 +14,8 @@ import javax.swing.BorderFactory;
 import javax.swing.JFrame;
 import javax.swing.JTextField;
 import javax.swing.SwingUtilities;
+import javax.swing.event.DocumentEvent;
+import javax.swing.event.DocumentListener;
 
 /**
  * Tiny always-on-top text field summoned above the pet (middle-click).
@@ -42,8 +45,8 @@ public final class ChatInput {
             w.setAlwaysOnTop(true);
             w.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
 
-            JTextField field = new JTextField(22);
-            field.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 13));
+            JTextField field = new JTextField(30);
+            field.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 15));
             field.setBackground(new Color(0x26, 0x20, 0x2A));
             field.setForeground(Color.WHITE);
             field.setCaretColor(Color.WHITE);
@@ -74,6 +77,36 @@ public final class ChatInput {
                     if (open == w) {
                         open = null;
                     }
+                }
+            });
+
+            // grow with the text, clamped to the screen's right edge
+            field.getDocument().addDocumentListener(new DocumentListener() {
+                private void grow() {
+                    int cols = Math.max(30, Math.min(70,
+                            field.getText().length() + 2));
+                    if (cols != field.getColumns()) {
+                        field.setColumns(cols);
+                        w.pack();
+                        int screenW = Toolkit.getDefaultToolkit()
+                                .getScreenSize().width;
+                        w.setLocation(Math.max(0, Math.min(w.getX(),
+                                screenW - w.getWidth())), w.getY());
+                    }
+                }
+
+                @Override
+                public void insertUpdate(DocumentEvent e) {
+                    grow();
+                }
+
+                @Override
+                public void removeUpdate(DocumentEvent e) {
+                    grow();
+                }
+
+                @Override
+                public void changedUpdate(DocumentEvent e) {
                 }
             });
 

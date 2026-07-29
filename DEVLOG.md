@@ -270,6 +270,26 @@ LAN presence + chat + size control work (PR #1) with the project's first
 unit tests. Shipped as both the runnable jar and the jpackage exe zip;
 v1.0.0 copies self-update via the tray.
 
+## 18. Wraparound patrol, remote fade, wrapped bubbles, growing chat box
+
+On `feature/wrap-fade-chat`:
+
+- **Patrol wraparound**: instead of turning at the screen edges, the pet now
+  walks fully off one side and reappears on the other, keeping direction.
+  Remote copies snap (not slide) across when a peer wraps, and their mapped
+  position stays clamped to the viewer's work area by the 0–1 fraction
+  protocol, so a mid-wrap peer just holds at the edge.
+- **Remote pet fading**: peers' pets fade in over ~0.4 s when they appear
+  and render at 90% opacity so they read as visitors next to the local pet;
+  name label and bubble fade with them.
+- **Wrapped bubbles**: speech bubbles word-wrap up to 4 lines (hard-splitting
+  oversized words), with an ellipsis only past that — replacing single-line
+  truncation. `Bubbles.wrap()` is measurer-injected and unit-tested.
+- **Chat input**: bigger (15 px font, 30 columns) and self-expanding — grows
+  with the text up to 70 columns, clamped to the screen's right edge.
+- Tests grow to 32 (wrap: single-line, word breaks, hard split, line cap +
+  ellipsis, empty text).
+
 ## Current state
 
 - **Skins**: Squirtle (default, procedural), Pikachu (character maps), and

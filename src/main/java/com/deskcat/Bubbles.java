@@ -1,5 +1,8 @@
 package com.deskcat;
 
+import java.util.ArrayList;
+import java.util.List;
+
 import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.graphics.Texture;
 import com.badlogic.gdx.graphics.g2d.BitmapFont;
@@ -8,14 +11,17 @@ import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 
 /**
  * Pixel-style speech bubble drawn in window-pixel coordinates at the top of a
- * pet window. Shared by the local pet and remote-peer windows.
+ * pet window. Shared by the local pet and remote-peer windows. Text wraps
+ * onto up to {@link #MAX_LINES} lines; only past that does it get an ellipsis.
  */
 public final class Bubbles {
+
+    static final int MAX_LINES = 4;
 
     private static final Color C_OUTLINE = Color.valueOf("26202A");
     private static final GlyphLayout LAYOUT = new GlyphLayout();
 
-    /** Text-width oracle, injectable so fitting is testable without GL. */
+    /** Text-width oracle, injectable so wrapping is testable without GL. */
     public interface Measurer {
         float width(String s);
     }
@@ -29,10 +35,19 @@ public final class Bubbles {
      */
     public static void draw(SpriteBatch batch, BitmapFont font, Texture px,
             String text, float alpha, int winW, float topY) {
-        String shown = fitText(font, text, winW - 28);
-        LAYOUT.setText(font, shown);
-        float tw = LAYOUT.width, th = LAYOUT.height;
-        float bw = tw + 14, bh = th + 12;
+        Measurer m = s -> {
+            LAYOUT.setText(font, s);
+            return LAYOUT.width;
+        };
+        float maxTextW = winW - 28;
+        List<String> lines = wrap(m, text, maxTextW, MAX_LINES);
+
+        float lineH = font.getLineHeight();
+        float tw = 0;
+        for (String line : lines) {
+            tw = Math.max(tw, m.width(line));
+        }
+        float bw = tw + 14, bh = lines.size() * lineH + 10;
         float bx = (winW - bw) / 2f;
         float by = topY - bh;
 
@@ -52,19 +67,60 @@ public final class Bubbles {
         batch.draw(px, winW / 2f - 3, by - 5, 6, 1);
 
         font.setColor(C_OUTLINE.r, C_OUTLINE.g, C_OUTLINE.b, alpha);
-        font.draw(batch, shown, bx + 7, by + bh - 5);
+        for (int i = 0; i < lines.size(); i++) {
+            font.draw(batch, lines.get(i), bx + 7, by + bh - 4 - i * lineH);
+        }
         font.setColor(Color.WHITE);
         batch.setColor(Color.WHITE);
     }
 
-    private static String fitText(BitmapFont font, String text, float maxW) {
-        return fitText(s -> {
-            LAYOUT.setText(font, s);
-            return LAYOUT.width;
-        }, text, maxW);
+    /**
+     * Greedy word wrap. Words wider than a whole line are hard-split; text
+     * that would exceed maxLines is cut with an ellipsis on the last line.
+     */
+    static List<String> wrap(Measurer m, String text, float maxW, int maxLines) {
+        List<String> lines = new ArrayList<String>();
+        StringBuilder cur = new StringBuilder();
+        for (String word : text.trim().split("\\s+")) {
+            // hard-split words that could never fit on one line
+            while (m.width(word) > maxW && word.length() > 1) {
+                int cut = word.length() - 1;
+                while (cut > 1 && m.width(word.substring(0, cut)) > maxW) {
+                    cut--;
+                }
+                String head = word.substring(0, cut);
+                if (cur.length() > 0) {
+                    lines.add(cur.toString());
+                    cur.setLength(0);
+                }
+                lines.add(head);
+                word = word.substring(cut);
+            }
+            String candidate = cur.length() == 0 ? word : cur + " " + word;
+            if (m.width(candidate) <= maxW || cur.length() == 0) {
+                cur.setLength(0);
+                cur.append(candidate);
+            } else {
+                lines.add(cur.toString());
+                cur.setLength(0);
+                cur.append(word);
+            }
+        }
+        if (cur.length() > 0) {
+            lines.add(cur.toString());
+        }
+        if (lines.isEmpty()) {
+            lines.add("");
+        }
+        if (lines.size() > maxLines) {
+            String last = lines.get(maxLines - 1);
+            lines = new ArrayList<String>(lines.subList(0, maxLines));
+            lines.set(maxLines - 1, fitText(m, last + "…", maxW));
+        }
+        return lines;
     }
 
-    /** Truncate with an ellipsis so the bubble always fits the window. */
+    /** Truncate with an ellipsis so a single line always fits. */
     static String fitText(Measurer m, String text, float maxW) {
         if (m.width(text) <= maxW) {
             return text;

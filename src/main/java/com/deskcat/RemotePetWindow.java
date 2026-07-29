@@ -46,6 +46,11 @@ public class RemotePetWindow implements ApplicationListener {
     private int lastScale;
     private boolean clickThrough;
     private float blinkIn = 3f, blinkLeft;
+
+    // fade in on appearance; stay slightly translucent so remote pets read
+    // as visitors rather than locals
+    private float appear;
+    private static final float BASE_ALPHA = 0.9f;
     private int tailFrame;
     private float tailTime;
     private static final int[] TAIL_CYCLE = {0, 1, 2, 1};
@@ -97,6 +102,8 @@ public class RemotePetWindow implements ApplicationListener {
     public void render() {
         float dt = Math.min(Gdx.graphics.getDeltaTime(), 1 / 20f);
         time += dt;
+        appear = Math.min(1f, appear + dt / 0.4f);
+        float ga = appear * BASE_ALPHA;
 
         if (lastScale != CatApp.scale) {
             lastScale = CatApp.scale;
@@ -124,6 +131,7 @@ public class RemotePetWindow implements ApplicationListener {
 
         // body + tail drawn mirrored around the window center when facing left
         float cx = CatApp.UNITS_W / 2f;
+        batch.setColor(1f, 1f, 1f, ga);
         Texture tail = a.tailTex[TAIL_CYCLE[tailFrame]];
         drawMirrored(tail, cx, a.tailX + 2 - cx, bob, sx, stretch,
                 tail.getWidth(), tail.getHeight());
@@ -131,8 +139,8 @@ public class RemotePetWindow implements ApplicationListener {
                 a.bodyTex.getWidth(), a.bodyTex.getHeight());
 
         boolean closed = sleeping || blinkLeft > 0f;
-        drawEye(a, a.eyeLX + 2, closed, bob, sx, cx);
-        drawEye(a, a.eyeRX + 2, closed, bob, sx, cx);
+        drawEye(a, a.eyeLX + 2, closed, bob, sx, cx, ga);
+        drawEye(a, a.eyeRX + 2, closed, bob, sx, cx, ga);
 
         batch.end();
 
@@ -143,16 +151,18 @@ public class RemotePetWindow implements ApplicationListener {
         layout.setText(font, label);
         float lx = (CatApp.winW() - layout.width) / 2f;
         float ly = CatApp.winH() - 4;
-        batch.setColor(0f, 0f, 0f, 0.45f);
+        batch.setColor(0f, 0f, 0f, 0.45f * appear);
         batch.draw(px, lx - 4, ly - layout.height - 4, layout.width + 8,
                 layout.height + 8);
         batch.setColor(Color.WHITE);
-        font.setColor(Color.WHITE);
+        font.setColor(1f, 1f, 1f, appear);
         font.draw(batch, label, lx, ly);
+        font.setColor(Color.WHITE);
 
         long now = System.currentTimeMillis();
         if (peer.bubble.isActive(now)) {
-            Bubbles.draw(batch, font, px, peer.bubble.text(), peer.bubble.alpha(now),
+            Bubbles.draw(batch, font, px, peer.bubble.text(),
+                    peer.bubble.alpha(now) * appear,
                     CatApp.winW(), ly - layout.height - 10);
         }
         batch.end();
@@ -166,38 +176,44 @@ public class RemotePetWindow implements ApplicationListener {
     }
 
     private void drawEye(SkinAssets a, float eyeX, boolean closed, float bob,
-            float sx, float cx) {
+            float sx, float cx, float ga) {
         float x = sx > 0 ? eyeX : 2 * cx - eyeX - a.eyeW;
         if (closed) {
-            batch.setColor(a.furColor);
+            tint(a.furColor, ga);
             batch.draw(px, x, bob + a.eyeY, a.eyeW, a.eyeH);
-            batch.setColor(C_OUTLINE);
+            tint(C_OUTLINE, ga);
             batch.draw(px, x, bob + a.eyeY + 1, a.eyeW, 1);
         } else if (a.eyeStyle == 0) {
-            batch.setColor(a.irisColor);
+            tint(a.irisColor, ga);
             batch.draw(px, x + 1, bob + a.eyeY + 1, 2, 2);
-            batch.setColor(C_OUTLINE);
+            tint(C_OUTLINE, ga);
             batch.draw(px, x + 1, bob + a.eyeY + 1, 1, 1);
         } else if (a.eyeStyle == 1) {
-            batch.setColor(C_OUTLINE);
+            tint(C_OUTLINE, ga);
             batch.draw(px, x, bob + a.eyeY, a.eyeW, a.eyeH);
-            batch.setColor(Color.WHITE);
+            batch.setColor(1f, 1f, 1f, ga);
             batch.draw(px, x + 1, bob + a.eyeY + a.eyeH - 1, 1, 1);
         } else {
-            batch.setColor(C_OUTLINE);
+            tint(C_OUTLINE, ga);
             batch.draw(px, x - 1, bob + a.eyeY - 1, a.eyeW + 2, a.eyeH + 2);
-            batch.setColor(a.irisColor);
+            tint(a.irisColor, ga);
             batch.draw(px, x, bob + a.eyeY, a.eyeW, a.eyeH);
-            batch.setColor(Color.WHITE);
+            batch.setColor(1f, 1f, 1f, ga);
             batch.draw(px, x + 1, bob + a.eyeY + a.eyeH - 2, 1, 2);
         }
         batch.setColor(Color.WHITE);
     }
 
+    private void tint(Color c, float alpha) {
+        batch.setColor(c.r, c.g, c.b, alpha);
+    }
+
     private void moveWindow(float dt) {
         float tx = usable.x + peer.xFrac * Math.max(1, usable.width - CatApp.winW());
         float ty = usable.y + peer.yFrac * Math.max(1, usable.height - CatApp.winH());
-        if (winXf < 0) {
+        if (winXf < 0 || Math.abs(tx - winXf) > usable.width / 2f) {
+            // first placement, or the peer wrapped around a screen edge —
+            // snap instead of sliding across the whole desktop
             winXf = tx;
             winYf = ty;
         } else {
