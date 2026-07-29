@@ -47,22 +47,49 @@ public final class Bubbles {
     public static void draw(SpriteBatch batch, BitmapFont font, Texture px,
             String text, float alpha, int winW, float topY, float scale,
             int effect, String colorHex, float time) {
-        font.getData().setScale(scale);
-        try {
-            Measurer m = s -> {
-                LAYOUT.setText(font, s);
-                return LAYOUT.width;
-            };
-            float maxTextW = winW - 28;
-            // bigger text gets fewer lines so the bubble stays inside the window
-            int maxLines = scale >= 2f ? 2 : (scale > 1.2f ? 3 : MAX_LINES);
-            List<String> lines = wrap(m, text, maxTextW, maxLines);
-
-            float lineH = font.getLineHeight();
-            float tw = 0;
+        Measurer m = s -> {
+            LAYOUT.setText(font, s);
+            return LAYOUT.width;
+        };
+        float maxTextW = winW - 28;
+        // the bubble can never leave the pet window: shrink the requested
+        // scale until the longest word fits a line and the bubble fits the
+        // space above the pet (a huge /size on a Small pet degrades gracefully)
+        float eff = Math.max(1f, scale);
+        List<String> lines;
+        float lineH, tw;
+        while (true) {
+            font.getData().setScale(eff);
+            int maxLines = eff >= 2f ? 2 : (eff > 1.2f ? 3 : MAX_LINES);
+            lines = wrap(m, text, maxTextW, maxLines);
+            lineH = font.getLineHeight();
+            tw = 0;
+            float widestWord = 0;
+            for (String word : text.trim().split("\\s+")) {
+                widestWord = Math.max(widestWord, m.width(word));
+            }
             for (String line : lines) {
                 tw = Math.max(tw, m.width(line));
             }
+            boolean fits = widestWord <= maxTextW
+                    && lines.size() * lineH + 10 <= topY;
+            if (fits || eff <= Math.min(1f, scale) + 0.01f) {
+                break;
+            }
+            eff = Math.max(Math.min(1f, scale), eff * 0.85f);
+        }
+        if (scale < 1f) {
+            // shrinking commands are honored as-is
+            font.getData().setScale(scale);
+            int maxLines = MAX_LINES;
+            lines = wrap(m, text, maxTextW, maxLines);
+            lineH = font.getLineHeight();
+            tw = 0;
+            for (String line : lines) {
+                tw = Math.max(tw, m.width(line));
+            }
+        }
+        try {
             float bw = tw + 14, bh = lines.size() * lineH + 10;
             float bx = (winW - bw) / 2f;
             float by = topY - bh;
