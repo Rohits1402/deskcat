@@ -36,6 +36,7 @@ public class RemotePetWindow implements ApplicationListener {
     private final Texture px;
     private final Rectangle usable;
     private final Consumer<String> dmSender;
+    private final Runnable shooter;
 
     private SpriteBatch batch;
     private OrthographicCamera unitCam, pxCam;
@@ -56,12 +57,13 @@ public class RemotePetWindow implements ApplicationListener {
     private static final int[] TAIL_CYCLE = {0, 1, 2, 1};
 
     public RemotePetWindow(Peer peer, BitmapFont font, Texture px,
-            Rectangle usable, Consumer<String> dmSender) {
+            Rectangle usable, Consumer<String> dmSender, Runnable shooter) {
         this.peer = peer;
         this.font = font;
         this.px = px;
         this.usable = usable;
         this.dmSender = dmSender;
+        this.shooter = shooter;
     }
 
     @Override
@@ -91,6 +93,8 @@ public class RemotePetWindow implements ApplicationListener {
                                         window.getPositionY(),
                                         text -> Gdx.app.postRunnable(() ->
                                                 dmSender.accept(text)))),
+                        new PetMenu.Item("Shoot " + name, () ->
+                                Gdx.app.postRunnable(shooter)),
                         new PetMenu.Item("Dismiss bubble", () ->
                                 Gdx.app.postRunnable(peer.bubble::clear)));
                 return true;
@@ -163,7 +167,9 @@ public class RemotePetWindow implements ApplicationListener {
         if (peer.bubble.isActive(now)) {
             Bubbles.draw(batch, font, px, peer.bubble.text(),
                     peer.bubble.alpha(now) * appear,
-                    CatApp.winW(), ly - layout.height - 10);
+                    CatApp.winW(), ly - layout.height - 10,
+                    peer.bubble.scale(), peer.bubble.effect(),
+                    peer.bubble.colorHex(), time);
         }
         batch.end();
     }

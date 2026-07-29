@@ -260,7 +260,8 @@ public class CatApp extends ApplicationAdapter {
 
         peerReg = new PeerRegistry(selfId);
         remoteMgr = new RemotePetsManager((Lwjgl3Application) Gdx.app, font, px,
-                (peer, text) -> doSendChat(text, peer.id));
+                (peer, text) -> doSendChat(text, peer.id),
+                peer -> shoot(peer.id));
         lan = new LanClient(selfId);
         lan.start();   // failure is silent; the pet just stays solo
 
@@ -405,6 +406,11 @@ public class CatApp extends ApplicationAdapter {
         long now = System.currentTimeMillis();
         for (com.deskcat.net.LanMsg m = lan.poll(); m != null; m = lan.poll()) {
             peerReg.onMessage(m, now);
+            if (m.type == LanMsg.ACTION && "shoot".equals(m.action)
+                    && (m.target == null || m.target.isEmpty()
+                            || m.target.equals(selfId))) {
+                reactToShot();
+            }
         }
         peerReg.prune(now);
         remoteMgr.sync(peerReg.peers());
@@ -433,7 +439,8 @@ public class CatApp extends ApplicationAdapter {
 
     /**
      * Called on the render thread with what the user typed. "@name message"
-     * DMs the peer with that display name; anything else broadcasts.
+     * DMs the peer with that display name; "/shoot" shoots; other /commands
+     * style the bubble (see ChatCommands).
      */
     private void sendChat(String raw) {
         String text = raw;
@@ -453,12 +460,34 @@ public class CatApp extends ApplicationAdapter {
 
     /** targetId null → broadcast; otherwise a DM to that peer. */
     private void doSendChat(String text, String targetId) {
-        if (text.isEmpty()) {
+        if (text.trim().toLowerCase().startsWith("/shoot")) {
+            shoot(targetId);
             return;
         }
-        lan.send(LanProtocol.encodeChat(selfId, userName, text, targetId));
-        ownBubble.show(text, System.currentTimeMillis());
+        ChatCommands.Parsed p = ChatCommands.parse(text);
+        if (p.text.isEmpty()) {
+            return;
+        }
+        lan.send(LanProtocol.encodeChat(selfId, userName, p.text, targetId,
+                p.scale, p.effect, p.colorHex));
+        ownBubble.show(p.text, System.currentTimeMillis(),
+                p.scale, p.effect, p.colorHex);
         wake();
+    }
+
+    /** Fire at one peer (or everyone when targetId is null). */
+    private void shoot(String targetId) {
+        lan.send(LanProtocol.encodeAction(selfId, userName, "shoot", targetId));
+        attack();   // our pet plays its signature attack as the muzzle flash
+        wake();
+    }
+
+    /** Someone shot us: flinch hard. */
+    private void reactToShot() {
+        wake();
+        alertLeft = 1.2f;
+        squash.kick(-6f);
+        sparkBurst(CAT_X + eyeCenterX, 18f, 12, sparkTex, 16f, 4f, 12f);
     }
 
     /** Resize the pet (and the chat/bubble camera); remote windows follow. */
@@ -1377,7 +1406,9 @@ public class CatApp extends ApplicationAdapter {
             batch.setProjectionMatrix(pxCam.combined);
             batch.begin();
             Bubbles.draw(batch, font, px, ownBubble.text(),
-                    ownBubble.alpha(nowMs), winW(), winH() - 4);
+                    ownBubble.alpha(nowMs), winW(), winH() - 4,
+                    ownBubble.scale(), ownBubble.effect(),
+                    ownBubble.colorHex(), time);
             batch.end();
         }
     }

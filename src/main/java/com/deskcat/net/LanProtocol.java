@@ -9,9 +9,13 @@ import java.util.List;
  *
  * <pre>
  * DC1|S|id|name|skin|xFrac|yFrac|facing|anim
- * DC1|C|id|name|text|target
+ * DC1|C|id|name|text|target|scale|effect|color
+ * DC1|A|id|name|action|target
  * DC1|B|id
  * </pre>
+ *
+ * The three CHAT style fields are optional on decode (older senders omit
+ * them), defaulting to scale 1 / no effect / default color.
  */
 public final class LanProtocol {
 
@@ -31,7 +35,19 @@ public final class LanProtocol {
 
     public static String encodeChat(String id, String name, String text,
             String target) {
+        return encodeChat(id, name, text, target, 1f, 0, "");
+    }
+
+    public static String encodeChat(String id, String name, String text,
+            String target, float scale, int effect, String colorHex) {
         return join(MAGIC, String.valueOf(LanMsg.CHAT), id, name, text,
+                target == null ? "" : target, String.valueOf(scale),
+                String.valueOf(effect), colorHex == null ? "" : colorHex);
+    }
+
+    public static String encodeAction(String id, String name, String action,
+            String target) {
+        return join(MAGIC, String.valueOf(LanMsg.ACTION), id, name, action,
                 target == null ? "" : target);
     }
 
@@ -73,6 +89,19 @@ public final class LanProtocol {
                     }
                     m.name = f.get(3);
                     m.text = f.get(4);
+                    m.target = f.get(5);
+                    if (f.size() >= 9) {
+                        m.chatScale = Float.parseFloat(f.get(6));
+                        m.chatEffect = Integer.parseInt(f.get(7));
+                        m.chatColor = f.get(8);
+                    }
+                    return m;
+                case LanMsg.ACTION:
+                    if (f.size() < 6) {
+                        return null;
+                    }
+                    m.name = f.get(3);
+                    m.action = f.get(4);
                     m.target = f.get(5);
                     return m;
                 case LanMsg.BYE:

@@ -29,50 +29,88 @@ public final class Bubbles {
     private Bubbles() {
     }
 
-    /**
-     * @param alpha 0..1 fade
-     * @param winW  window width in pixels; the bubble is centered and clamped
-     */
+    /** Back-compat: unstyled bubble. */
     public static void draw(SpriteBatch batch, BitmapFont font, Texture px,
             String text, float alpha, int winW, float topY) {
-        Measurer m = s -> {
-            LAYOUT.setText(font, s);
-            return LAYOUT.width;
-        };
-        float maxTextW = winW - 28;
-        List<String> lines = wrap(m, text, maxTextW, MAX_LINES);
-
-        float lineH = font.getLineHeight();
-        float tw = 0;
-        for (String line : lines) {
-            tw = Math.max(tw, m.width(line));
-        }
-        float bw = tw + 14, bh = lines.size() * lineH + 10;
-        float bx = (winW - bw) / 2f;
-        float by = topY - bh;
-
-        batch.setColor(1f, 1f, 1f, 0.95f * alpha);
-        batch.draw(px, bx, by, bw, bh);
-        batch.setColor(C_OUTLINE.r, C_OUTLINE.g, C_OUTLINE.b, alpha);
-        batch.draw(px, bx, by - 1, bw, 1);
-        batch.draw(px, bx, by + bh, bw, 1);
-        batch.draw(px, bx - 1, by, 1, bh);
-        batch.draw(px, bx + bw, by, 1, bh);
-        // tail nub pointing down at the pet
-        batch.setColor(1f, 1f, 1f, 0.95f * alpha);
-        batch.draw(px, winW / 2f - 3, by - 4, 6, 4);
-        batch.setColor(C_OUTLINE.r, C_OUTLINE.g, C_OUTLINE.b, alpha);
-        batch.draw(px, winW / 2f - 4, by - 4, 1, 4);
-        batch.draw(px, winW / 2f + 3, by - 4, 1, 4);
-        batch.draw(px, winW / 2f - 3, by - 5, 6, 1);
-
-        font.setColor(C_OUTLINE.r, C_OUTLINE.g, C_OUTLINE.b, alpha);
-        for (int i = 0; i < lines.size(); i++) {
-            font.draw(batch, lines.get(i), bx + 7, by + bh - 4 - i * lineH);
-        }
-        font.setColor(Color.WHITE);
-        batch.setColor(Color.WHITE);
+        draw(batch, font, px, text, alpha, winW, topY, 1f,
+                ChatCommands.EFFECT_NONE, "", 0f);
     }
+
+    /**
+     * @param alpha    0..1 fade
+     * @param winW     window width in pixels; the bubble is centered/clamped
+     * @param scale    text scale from chat commands (/big, /size N …)
+     * @param effect   ChatCommands.EFFECT_* (shake, rainbow)
+     * @param colorHex RRGGBB text color, "" for the default
+     * @param time     caller's animation clock, drives shake/rainbow
+     */
+    public static void draw(SpriteBatch batch, BitmapFont font, Texture px,
+            String text, float alpha, int winW, float topY, float scale,
+            int effect, String colorHex, float time) {
+        font.getData().setScale(scale);
+        try {
+            Measurer m = s -> {
+                LAYOUT.setText(font, s);
+                return LAYOUT.width;
+            };
+            float maxTextW = winW - 28;
+            // bigger text gets fewer lines so the bubble stays inside the window
+            int maxLines = scale >= 2f ? 2 : (scale > 1.2f ? 3 : MAX_LINES);
+            List<String> lines = wrap(m, text, maxTextW, maxLines);
+
+            float lineH = font.getLineHeight();
+            float tw = 0;
+            for (String line : lines) {
+                tw = Math.max(tw, m.width(line));
+            }
+            float bw = tw + 14, bh = lines.size() * lineH + 10;
+            float bx = (winW - bw) / 2f;
+            float by = topY - bh;
+
+            batch.setColor(1f, 1f, 1f, 0.95f * alpha);
+            batch.draw(px, bx, by, bw, bh);
+            batch.setColor(C_OUTLINE.r, C_OUTLINE.g, C_OUTLINE.b, alpha);
+            batch.draw(px, bx, by - 1, bw, 1);
+            batch.draw(px, bx, by + bh, bw, 1);
+            batch.draw(px, bx - 1, by, 1, bh);
+            batch.draw(px, bx + bw, by, 1, bh);
+            // tail nub pointing down at the pet
+            batch.setColor(1f, 1f, 1f, 0.95f * alpha);
+            batch.draw(px, winW / 2f - 3, by - 4, 6, 4);
+            batch.setColor(C_OUTLINE.r, C_OUTLINE.g, C_OUTLINE.b, alpha);
+            batch.draw(px, winW / 2f - 4, by - 4, 1, 4);
+            batch.draw(px, winW / 2f + 3, by - 4, 1, 4);
+            batch.draw(px, winW / 2f - 3, by - 5, 6, 1);
+
+            Color base = C_OUTLINE;
+            if (!colorHex.isEmpty()) {
+                try {
+                    base = Color.valueOf(colorHex);
+                } catch (Throwable ignored) {
+                    // bad hex from the wire: keep the default
+                }
+            }
+            for (int i = 0; i < lines.size(); i++) {
+                float dx = 0, dy = 0;
+                Color c = base;
+                if (effect == ChatCommands.EFFECT_SHAKE) {
+                    dx = (float) Math.sin(time * 45f + i * 1.7f) * 1.5f * scale;
+                    dy = (float) Math.cos(time * 38f + i * 2.3f) * 1.2f * scale;
+                } else if (effect == ChatCommands.EFFECT_RAINBOW) {
+                    c = TMP.fromHsv((time * 120f + i * 40f) % 360f, 0.8f, 0.85f);
+                }
+                font.setColor(c.r, c.g, c.b, alpha);
+                font.draw(batch, lines.get(i),
+                        bx + 7 + dx, by + bh - 4 - i * lineH + dy);
+            }
+            font.setColor(Color.WHITE);
+            batch.setColor(Color.WHITE);
+        } finally {
+            font.getData().setScale(1f);   // the font is shared — always restore
+        }
+    }
+
+    private static final Color TMP = new Color();
 
     /**
      * Greedy word wrap. Words wider than a whole line are hard-split; text

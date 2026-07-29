@@ -49,7 +49,7 @@ public class PeerRegistry {
             p.name = m.name;
             // show broadcasts and DMs addressed to me; ignore others' DMs
             if (m.target == null || m.target.isEmpty() || m.target.equals(selfId)) {
-                p.bubble.show(m.text, nowMs);
+                p.bubble.show(m.text, nowMs, m.chatScale, m.chatEffect, m.chatColor);
             }
         }
         return isNew ? p : null;

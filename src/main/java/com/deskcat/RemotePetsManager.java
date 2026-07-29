@@ -12,6 +12,7 @@ import java.util.Iterator;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.BiConsumer;
+import java.util.function.Consumer;
 
 import com.badlogic.gdx.backends.lwjgl3.Lwjgl3Application;
 import com.badlogic.gdx.backends.lwjgl3.Lwjgl3Window;
@@ -31,15 +32,17 @@ public class RemotePetsManager {
     private final BitmapFont font;
     private final Texture px;
     private final BiConsumer<Peer, String> dmSender;
+    private final Consumer<Peer> shooter;
     private final Rectangle usable = usableScreenBounds();
     private final Map<String, Lwjgl3Window> windows = new HashMap<String, Lwjgl3Window>();
 
     public RemotePetsManager(Lwjgl3Application app, BitmapFont font, Texture px,
-            BiConsumer<Peer, String> dmSender) {
+            BiConsumer<Peer, String> dmSender, Consumer<Peer> shooter) {
         this.app = app;
         this.font = font;
         this.px = px;
         this.dmSender = dmSender;
+        this.shooter = shooter;
     }
 
     /** The primary screen minus the taskbar; also used for position mapping. */
@@ -94,7 +97,8 @@ public class RemotePetsManager {
                 usable.x + Math.round(peer.xFrac * Math.max(1, usable.width - CatApp.winW())),
                 usable.y + Math.round(peer.yFrac * Math.max(1, usable.height - CatApp.winH())));
         return app.newWindow(new RemotePetWindow(peer, font, px, usable,
-                text -> dmSender.accept(peer, text)), cfg);
+                text -> dmSender.accept(peer, text),
+                () -> shooter.accept(peer)), cfg);
     }
 
     public void closeAll() {
