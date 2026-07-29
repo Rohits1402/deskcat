@@ -362,6 +362,12 @@ public class CatApp extends ApplicationAdapter {
         }
         items.add(new PetMenu.Item(hidden ? "Come out" : "Hide behind taskbar",
                 () -> Gdx.app.postRunnable(this::toggleHidden)));
+        for (Peer peer : peerReg.peers()) {
+            final String pid = peer.id;
+            String pname = peer.name == null || peer.name.isEmpty() ? "?" : peer.name;
+            items.add(new PetMenu.Item("Shoot " + pname,
+                    () -> Gdx.app.postRunnable(() -> shoot(pid))));
+        }
         if (!trayOk) {
             items.add(new PetMenu.Item("Quit DeskCat", () ->
                     Gdx.app.postRunnable(() -> Gdx.app.exit())));
