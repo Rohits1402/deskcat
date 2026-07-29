@@ -117,7 +117,7 @@ public class CatApp extends ApplicationAdapter {
     private FrameBuffer fbo;
     private TextureRegion fboRegion;
     private Texture bodyTex, heartTex, zzzTex, alertTex, sparkTex, pawTex, px;
-    private Texture waterDropTex;
+    private Texture waterDropTex, noteTex;
     private Texture[] tailTex;
 
     private Lwjgl3Window window;
@@ -174,6 +174,17 @@ public class CatApp extends ApplicationAdapter {
     private MenuItem updateItem;
     private volatile Updater.Release pendingUpdate;
 
+    // stretch / water reminders (session-only; nothing is persisted)
+    private static final float STRETCH_EVERY = 30 * 60f;
+    private static final float WATER_EVERY = 45 * 60f;
+    private volatile boolean stretchOn, waterOn;
+    private float stretchIn, waterIn;
+    private float stretchLeft, waterRemindLeft, remindDropIn;
+
+    // grooving to whatever the system is playing
+    private float musicAmp, musicAbove, musicBelow, noteIn;
+    private boolean musicOn, danceNow;
+
     // keyboard kneading: the global hook only bumps a counter — which keys
     // were pressed is never inspected or stored
     private final AtomicInteger keyTicks = new AtomicInteger();
@@ -223,6 +234,7 @@ public class CatApp extends ApplicationAdapter {
 
         applySkin(skin);
         waterDropTex = PixelArt.fromMap(PixelArt.WATER_DROP);
+        noteTex = PixelArt.fromMap(PixelArt.NOTE);
         heartTex = PixelArt.fromMap(PixelArt.HEART);
         zzzTex = PixelArt.fromMap(PixelArt.ZZZ);
         alertTex = PixelArt.fromMap(PixelArt.ALERT);
@@ -240,6 +252,7 @@ public class CatApp extends ApplicationAdapter {
         WindowTricks.applyExStyles(window, false);
         setupTray();
         setupKeyboardHook();
+        SystemAudio.start();
 
         font = new BitmapFont();
         pxCam = new OrthographicCamera();
@@ -578,6 +591,36 @@ public class CatApp extends ApplicationAdapter {
             }
             menu.add(gapMenu);
 
+            Menu remindMenu = new Menu("Reminders");
+            final CheckboxMenuItem stretchItem =
+                    new CheckboxMenuItem("Stretch every 30 min", false);
+            stretchItem.addItemListener(e -> {
+                stretchOn = stretchItem.getState();
+                stretchIn = STRETCH_EVERY;
+            });
+            remindMenu.add(stretchItem);
+            final CheckboxMenuItem waterItem =
+                    new CheckboxMenuItem("Drink water every 45 min", false);
+            waterItem.addItemListener(e -> {
+                waterOn = waterItem.getState();
+                waterIn = WATER_EVERY;
+            });
+            remindMenu.add(waterItem);
+            menu.add(remindMenu);
+
+            final CheckboxMenuItem soundItem = new CheckboxMenuItem("Sound", true);
+            soundItem.addItemListener(e -> SoundFx.enabled = soundItem.getState());
+            menu.add(soundItem);
+
+            final CheckboxMenuItem startupItem = new CheckboxMenuItem(
+                    "Start with Windows", isStartupEnabled());
+            startupItem.addItemListener(e -> {
+                if (!setStartup(startupItem.getState())) {
+                    startupItem.setState(false);
+                }
+            });
+            menu.add(startupItem);
+
             updateItem = new MenuItem("Check for updates");
             updateItem.addActionListener(e -> installOrCheck());
             menu.add(updateItem);
@@ -592,6 +635,63 @@ public class CatApp extends ApplicationAdapter {
             trayOk = true;
         } catch (Throwable t) {
             trayOk = false;   // right-click on the pet quits instead
+        }
+    }
+
+    private static final String RUN_KEY =
+            "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run";
+
+    /** Launch command for the Run key: the packaged exe, or javaw + jar. */
+    private static String startupCommand() {
+        try {
+            java.io.File jar = Updater.runningJar();
+            if (jar == null) {
+                return null;   // dev mode: nothing sensible to register
+            }
+            java.io.File exe = new java.io.File(
+                    jar.getParentFile().getParentFile(), "DeskCat.exe");
+            if (exe.isFile()) {
+                return "\"" + exe.getAbsolutePath() + "\"";
+            }
+            String javaw = new java.io.File(new java.io.File(
+                    System.getProperty("java.home"), "bin"),
+                    "javaw.exe").getAbsolutePath();
+            return "\"" + javaw + "\" -jar \"" + jar.getAbsolutePath() + "\"";
+        } catch (Throwable t) {
+            return null;
+        }
+    }
+
+    private boolean isStartupEnabled() {
+        try {
+            Process p = Runtime.getRuntime().exec(new String[] {
+                    "reg", "query", RUN_KEY, "/v", "DeskCat"});
+            return p.waitFor() == 0;
+        } catch (Throwable t) {
+            return false;
+        }
+    }
+
+    private boolean setStartup(boolean on) {
+        try {
+            if (on) {
+                String cmd = startupCommand();
+                if (cmd == null) {
+                    notifyTray("DeskCat", "Startup needs the packaged jar or "
+                            + "exe; a gradle dev run can't be registered.");
+                    return false;
+                }
+                Process p = Runtime.getRuntime().exec(new String[] {
+                        "reg", "add", RUN_KEY, "/v", "DeskCat", "/t", "REG_SZ",
+                        "/d", cmd, "/f"});
+                return p.waitFor() == 0;
+            }
+            Process p = Runtime.getRuntime().exec(new String[] {
+                    "reg", "delete", RUN_KEY, "/v", "DeskCat", "/f"});
+            p.waitFor();
+            return true;
+        } catch (Throwable t) {
+            return false;
         }
     }
 
@@ -681,10 +781,16 @@ public class CatApp extends ApplicationAdapter {
     private void attack() {
         if (attackType == 0) {
             alertLeft = 0.8f;    // the tabby just gets startled by pokes
+            SoundFx.chirp();
             return;
         }
         wake();
         squash.kick(5f);          // excited hop
+        if (attackType == 1) {
+            SoundFx.zap();
+        } else {
+            SoundFx.splash();
+        }
         if (attackType == 1) {
             boltLeft = 0.7f;
             bolts.clear();
@@ -805,6 +911,86 @@ public class CatApp extends ApplicationAdapter {
         boltLeft -= dt;
         waterLeft -= dt;
         typingLeft -= dt;
+        stretchLeft -= dt;
+        waterRemindLeft -= dt;
+
+        if (stretchOn && !dragging) {
+            stretchIn -= dt;
+            if (stretchIn <= 0f) {
+                stretchIn = STRETCH_EVERY;
+                stretchLeft = 4f;   // long tall stretch, eyes closed
+                wake();
+                if (wanderState == 1 || wanderState == 2) {
+                    beginReturn();
+                }
+                notifyTray("Stretch time",
+                        "DeskCat is stretching - join it for a moment.");
+                SoundFx.chirp();
+            }
+        }
+        if (waterOn && !dragging) {
+            waterIn -= dt;
+            if (waterIn <= 0f) {
+                waterIn = WATER_EVERY;
+                waterRemindLeft = 3f;
+                squash.kick(4f);    // excited hop
+                wake();
+                if (wanderState == 1 || wanderState == 2) {
+                    beginReturn();
+                }
+                notifyTray("Water break", "Time to drink some water.");
+                SoundFx.chirp();
+            }
+        }
+        float sysPeak = SystemAudio.peak();
+        musicAmp = MathUtils.lerp(musicAmp, Math.min(1f, sysPeak * 6f), 0.25f);
+        if (!musicOn) {
+            musicAbove = sysPeak > 0.02f ? musicAbove + dt : 0f;
+            if (musicAbove > 0.6f) {
+                musicOn = true;
+                wake();
+            }
+        } else {
+            musicBelow = sysPeak < 0.005f ? musicBelow + dt : 0f;
+            if (musicBelow > 2.5f) {
+                musicOn = false;
+            }
+        }
+        danceNow = musicOn && !sleeping && !dragging && wanderState == 0
+                && boltLeft <= 0f && waterLeft <= 0f && stretchLeft <= 0f
+                && !kneadNow;
+        if (danceNow) {
+            noteIn -= dt;
+            if (noteIn <= 0f) {
+                noteIn = MathUtils.random(0.5f, 0.9f);
+                Particle m = new Particle();
+                m.tex = noteTex;
+                m.x = CAT_X + eyeCenterX + MathUtils.random(-8f, 8f);
+                m.y = 27f;
+                m.vx = MathUtils.random(-2f, 2f);
+                m.vy = MathUtils.random(5f, 8f);
+                m.maxLife = 1.7f;
+                m.scale = MathUtils.randomBoolean() ? 1f : 1.5f;
+                particles.add(m);
+            }
+        }
+
+        if (waterRemindLeft > 0f) {
+            remindDropIn -= dt;
+            if (remindDropIn <= 0f) {
+                remindDropIn = 0.12f;
+                Particle d = new Particle();
+                d.tex = waterDropTex;
+                d.x = CAT_X + eyeCenterX + MathUtils.random(-7f, 7f);
+                d.y = 28f;
+                d.vx = MathUtils.random(-2f, 2f);
+                d.vy = MathUtils.random(8f, 14f);
+                d.grav = -50f;
+                d.maxLife = 1.2f;
+                d.scale = MathUtils.randomBoolean() ? 1f : 1.4f;
+                particles.add(d);
+            }
+        }
 
         if (waterLeft > 0.1f) {
             dropIn -= dt;
@@ -859,7 +1045,7 @@ public class CatApp extends ApplicationAdapter {
         }
 
         if (!sleeping && idleTime > 60f && !dragging && !petActive
-                && wanderState == 0 && typingLeft <= 0f) {
+                && wanderState == 0 && typingLeft <= 0f && !musicOn) {
             sleeping = true;
         }
         if (sleeping) {
@@ -889,7 +1075,8 @@ public class CatApp extends ApplicationAdapter {
         if (wanderState == 0) {
             boolean eligible = !sleeping && !dragging && !pressed && !petActive
                     && !hidden && boltLeft <= 0f && waterLeft <= 0f
-                    && typingLeft <= 0f && idleTime > 3f;
+                    && typingLeft <= 0f && stretchLeft <= 0f
+                    && waterRemindLeft <= 0f && idleTime > 3f;
             if (eligible) {
                 wanderIn -= dt;
                 if (wanderIn <= 0f) {
@@ -980,7 +1167,8 @@ public class CatApp extends ApplicationAdapter {
     private void updateSpring(float dt) {
         float target = dragging ? 1.2f
                 : (wanderState == 1 ? 1.12f          // stretch while falling
-                : (wanderState == 4 ? 1.08f : 1f));  // and while hopping home
+                : (wanderState == 4 ? 1.08f          // and while hopping home
+                : (stretchLeft > 0f ? 1.5f : 1f)));  // reminder: tall stretch
         scaleY = squash.update(target, dt);
     }
 
@@ -999,7 +1187,8 @@ public class CatApp extends ApplicationAdapter {
     private void updateTail(float dt) {
         float interval = sleeping ? 0.8f
                 : (alertLeft > 0f ? 0.12f
-                : (wanderState == 2 || wanderState == 3 ? 0.15f : 0.3f));
+                : (wanderState == 2 || wanderState == 3 ? 0.15f
+                : (danceNow ? 0.18f : 0.3f)));
         tailTime += dt;
         if (tailTime >= interval) {
             tailTime = 0f;
@@ -1044,7 +1233,8 @@ public class CatApp extends ApplicationAdapter {
         }
 
         boolean closed = sleeping || blinkLeft > 0f || boltLeft > 0.15f
-                || waterLeft > 0.2f;
+                || waterLeft > 0.2f
+                || (stretchLeft > 0.8f && stretchLeft < 3.4f);
         if (closed) {
             drawClosedEye(eyeLX + shake);
             drawClosedEye(eyeRX + shake);
@@ -1139,6 +1329,11 @@ public class CatApp extends ApplicationAdapter {
             if (facingLeft) {
                 scaleX = -scaleX;
             }
+        } else if (danceNow) {
+            // groove scaled by how loud the music actually is
+            float amp = 0.3f + 0.7f * musicAmp;
+            bob = Math.abs(MathUtils.sin(time * 7f)) * 1.2f * amp;
+            waddle = MathUtils.sin(time * 7f) * 3.5f * amp;
         }
         batch.draw(fboRegion, CAT_X, bob, FBO_W / 2f, 0,
                 FBO_W, FBO_H, scaleX, scaleY, waddle);
@@ -1190,6 +1385,7 @@ public class CatApp extends ApplicationAdapter {
         if (lan != null) {
             lan.close();
         }
+        SystemAudio.stop();
         try {
             GlobalScreen.unregisterNativeHook();
         } catch (Throwable ignored) {
@@ -1209,6 +1405,7 @@ public class CatApp extends ApplicationAdapter {
         alertTex.dispose();
         sparkTex.dispose();
         waterDropTex.dispose();
+        noteTex.dispose();
         px.dispose();
     }
 }

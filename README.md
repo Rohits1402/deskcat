@@ -21,8 +21,21 @@ taskbar-free window and reacts to what you do — inspired by desktop pets like
   and paces endlessly between the edges; any mouse or keyboard input sends it
   hurrying back to exactly where it was.
 - **Sleep** — after a minute of idle it dozes off with floating Zzz.
-- **System tray** — no taskbar button; the tray icon hosts a live skin
-  switcher and the quit menu.
+- **Stretch and water reminders** — opt-in from the tray: every 30 minutes
+  the pet rises into a long tall stretch so you stretch along; every 45
+  minutes it hops and fountains water droplets to remind you to drink.
+  Both come with a tray notification and a chirp.
+- **Sound effects** — a zap, a splash, and a mew-like chirp, all
+  synthesized in code (no audio files); mute from the tray.
+- **Grooves to your music** — when the system is playing audio, the pet
+  bobs and sways with the actual loudness, its tail wags double-time, and
+  musical notes float up. Detection reads only the output peak level (a
+  single loudness number via Windows Core Audio) — no audio is ever
+  captured or recorded.
+- **Start with Windows** — one tray checkbox registers the packaged
+  jar/exe in the per-user Run key (HKCU); untick to remove it.
+- **System tray** — no taskbar button; the tray icon hosts the skin
+  switcher, reminders, sound and startup toggles, updates, and quit.
 
 ## Skins
 
@@ -56,8 +69,14 @@ Right-click the tray icon (yellow bolt) to switch skins on the fly
 ## Installing and updates
 
 Packaged builds live on the
-[releases page](https://github.com/Rohits1402/deskcat/releases) as a single
-runnable jar:
+[releases page](https://github.com/Rohits1402/deskcat/releases) in two
+flavors:
+
+- **`DeskCat-x.y.z-win64.zip`** — unzip anywhere and double-click
+  `DeskCat.exe`. A trimmed Java runtime is bundled inside; nothing needs to
+  be installed.
+- **`deskcat-x.y.z.jar`** — single runnable jar for machines that already
+  have Java 8+:
 
 ```
 java -jar deskcat-1.0.0.jar
@@ -82,4 +101,6 @@ the app's only network access; nothing is ever sent.
 - Wandering moves the OS window itself along the bottom of the work area.
 
 No telemetry. The only network access is the update check against GitHub
-Releases; the only files written are the updater's own temp files.
+Releases; the only files written are the updater's own temp files; the only
+registry touch is the optional user-toggled startup entry. Reminder settings
+are session-only — nothing is persisted.

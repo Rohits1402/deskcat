@@ -382,6 +382,16 @@ public final class PixelArt {
             ".Y.",
     };
 
+    public static final String[] NOTE = {
+            "....K.",
+            "....K.",
+            "....K.",
+            "....K.",
+            ".BBBK.",
+            "BBBBK.",
+            ".BBB..",
+    };
+
     public static final String[] ALERT = {
             "RRR",
             "RRR",

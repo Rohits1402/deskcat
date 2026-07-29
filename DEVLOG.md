@@ -219,6 +219,49 @@ separately by another dev — the LAN work reads the launch args for now
   unified into one (versioned name + `Implementation-Version` from main,
   tuned JVM defaults and UTF-8 compile encoding from the branch).
 
+## 14. Windows executable
+
+- Downloaded Temurin JDK 21 (to `~/.jdks`) purely as a packaging toolchain —
+  the app still targets Java 8.
+- `jpackage --type app-image` wraps the fat jar into
+  `build/dist/DeskCat/DeskCat.exe` with a trimmed, bundled Java 21 runtime:
+  double-click to run, no Java required on the machine.
+- `DeskCat-1.0.0-win64.zip` (~67 MB) uploaded to the v1.0.0 release
+  alongside the jar; README documents both install flavors.
+- The auto-updater still functions inside the app image (it swaps the jar
+  under `app/`), provided the folder sits somewhere user-writable.
+
+## 15. Reminders, sound effects, launch at startup
+
+- **Stretch/water reminders** (tray > Reminders, opt-in, session-only):
+  every 30 min the pet performs a long tall stretch (spring target 1.5,
+  eyes closed mid-stretch) so the user stretches along; every 45 min it
+  hops and fountains water droplets overhead. Both post a tray balloon,
+  chirp, and call the pet home first if it's out patrolling.
+- **SoundFx**: procedurally synthesized PCM — thunderbolt zap (noise +
+  descending square), water-gun splash (noise + rising bubble sweeps),
+  and a mew-like chirp (vibrato sine sweep) for startles and reminders.
+  No audio files; tray "Sound" checkbox mutes.
+- **Start with Windows**: tray checkbox writing the per-user
+  `HKCU\...\Run` key via reg.exe — registers the packaged exe (preferred)
+  or `javaw -jar`; dev runs explain they can't be registered. Unticking
+  deletes the value.
+
+## 16. Grooving to system audio
+
+- New `SystemAudio`: a PowerShell helper (inline C# COM interop against
+  `IAudioMeterInformation`, compiled in memory, launched via
+  `-EncodedCommand` so nothing touches disk) streams the system output
+  peak level at 5 Hz; a daemon thread parses it into a volatile float.
+  Peak level only — no audio capture, ever.
+- When sound is sustained (~0.6 s above threshold, with hysteresis so
+  brief dings don't trigger it), the pet starts dancing: bob + sway
+  scaled by the smoothed loudness envelope, tail at double speed, and
+  musical-note particles floating up. Music also blocks sleep — it
+  grooves instead.
+- Dancing yields to everything else: dragging, patrol, kneading,
+  attacks, reminders.
+
 ## Current state
 
 - **Skins**: Squirtle (default, procedural), Pikachu (character maps), and

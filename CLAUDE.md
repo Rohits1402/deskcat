@@ -43,12 +43,32 @@ Key mechanics that span the codebase:
 - Pokémon-inspired skins (Squirtle, Pikachu) are personal-use fan art — must be stripped before any public release; the cat is the only shippable original character.
 - No telemetry. The ONLY sanctioned network access is the GitHub Releases
   update check/download in [Updater.java](src/main/java/com/deskcat/Updater.java);
-  the only runtime file writes are that updater's temp jar + swap script.
-  Never add anything beyond that.
+  the only runtime file writes are that updater's temp jar + swap script; the
+  only registry access is the user-toggled `HKCU\...\Run` startup entry
+  (via `reg.exe`). Never add anything beyond those. Reminder/sound settings
+  are deliberately session-only — do not add a config file.
+- Sounds are synthesized PCM in
+  [SoundFx.java](src/main/java/com/deskcat/SoundFx.java) (no audio assets);
+  each play opens a short-lived `AudioDevice` on a daemon thread.
+- [SystemAudio.java](src/main/java/com/deskcat/SystemAudio.java) spawns one
+  PowerShell helper subprocess (inline C# via Add-Type, `-EncodedCommand`,
+  nothing on disk) that streams the Core Audio output PEAK LEVEL — one float
+  per 200 ms. It must never capture audio samples; peak level only. The
+  helper dies with the app (dispose calls stop; a broken stdout pipe ends
+  it if the JVM is hard-killed).
 - Releases: bump `CatApp.VERSION` and the `fatJar` version in
   [build.gradle](build.gradle) together, run `gradle fatJar`, then
   `gh release create vX.Y.Z build/libs/deskcat-X.Y.Z.jar`. The updater
   compares `tag_name` against `CatApp.VERSION` and installs the first `.jar`
-  asset. Run packaged builds with JRE 8u491+ — the 2016 JDK 8 truststore may
+  asset. Run jar builds with JRE 8u491+ — the 2016 JDK 8 truststore may
   fail TLS to GitHub, which degrades the updater silently.
+- Windows exe: `jpackage --type app-image --name DeskCat --input build/libs
+  --main-jar deskcat-X.Y.Z.jar --dest build/dist --app-version X.Y.Z
+  --vendor Rohits1402`, then zip `build/dist/DeskCat` as
+  `DeskCat-X.Y.Z-win64.zip` and upload it to the release alongside the jar.
+  jpackage lives in the Temurin 21 install at `~/.jdks/jdk-21*` (the app
+  still compiles for Java 8; the exe bundles the 21 runtime). The
+  auto-updater works inside the app image too — it swaps `app/*.jar` in
+  place — but only when the unzipped folder is user-writable. The packaged
+  exe must be closed before zipping; the launcher locks its own jar.
 - [DEVLOG.md](DEVLOG.md) is the project history and backlog; append to it when making significant changes.
