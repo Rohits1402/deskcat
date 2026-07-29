@@ -51,7 +51,23 @@ gradle run --args="cat"
 ```
 
 Right-click the tray icon (yellow bolt) to switch skins on the fly
-(Skin submenu) or to quit.
+(Skin submenu), check for updates, or quit.
+
+## Installing and updates
+
+Packaged builds live on the
+[releases page](https://github.com/Rohits1402/deskcat/releases) as a single
+runnable jar:
+
+```
+java -jar deskcat-1.0.0.jar
+```
+
+The app checks GitHub Releases for a newer version shortly after startup
+(and on demand via the tray's "Check for updates"). If one exists, a tray
+notification appears and the menu item becomes "Install update" — clicking
+it downloads the new jar, swaps it in place, and relaunches. This check is
+the app's only network access; nothing is ever sent.
 
 ## How it works
 
@@ -65,4 +81,5 @@ Right-click the tray icon (yellow bolt) to switch skins on the fly
   from JNativeHook; both work without window focus.
 - Wandering moves the OS window itself along the bottom of the work area.
 
-No telemetry, no network calls, no files written.
+No telemetry. The only network access is the update check against GitHub
+Releases; the only files written are the updater's own temp files.

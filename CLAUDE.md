@@ -41,5 +41,14 @@ Key mechanics that span the codebase:
 - Commits: no `Co-Authored-By` trailer, no Claude/AI as author or committer, no generated-with footers. Plain commit messages only.
 
 - Pokémon-inspired skins (Squirtle, Pikachu) are personal-use fan art — must be stripped before any public release; the cat is the only shippable original character.
-- No telemetry, no network calls, no files written at runtime — keep it that way.
+- No telemetry. The ONLY sanctioned network access is the GitHub Releases
+  update check/download in [Updater.java](src/main/java/com/deskcat/Updater.java);
+  the only runtime file writes are that updater's temp jar + swap script.
+  Never add anything beyond that.
+- Releases: bump `CatApp.VERSION` and the `fatJar` version in
+  [build.gradle](build.gradle) together, run `gradle fatJar`, then
+  `gh release create vX.Y.Z build/libs/deskcat-X.Y.Z.jar`. The updater
+  compares `tag_name` against `CatApp.VERSION` and installs the first `.jar`
+  asset. Run packaged builds with JRE 8u491+ — the 2016 JDK 8 truststore may
+  fail TLS to GitHub, which degrades the updater silently.
 - [DEVLOG.md](DEVLOG.md) is the project history and backlog; append to it when making significant changes.

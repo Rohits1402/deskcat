@@ -49,6 +49,9 @@ import com.badlogic.gdx.math.MathUtils;
  */
 public class CatApp extends ApplicationAdapter {
 
+    /** Keep in sync with the fatJar version in build.gradle. */
+    public static final String VERSION = "1.0.0";
+
     public static final int SCALE = 5;
     public static final int UNITS_W = 44;
     public static final int UNITS_H = 42;
@@ -139,6 +142,8 @@ public class CatApp extends ApplicationAdapter {
 
     private boolean trayOk;
     private TrayIcon trayIcon;
+    private MenuItem updateItem;
+    private volatile Updater.Release pendingUpdate;
 
     // keyboard kneading: the global hook only bumps a counter — which keys
     // were pressed is never inspected or stored
@@ -193,6 +198,16 @@ public class CatApp extends ApplicationAdapter {
         hideFromTaskbar();
         setupTray();
         setupKeyboardHook();
+
+        Thread boot = new Thread(() -> {
+            try {
+                Thread.sleep(8000);
+            } catch (InterruptedException ignored) {
+            }
+            checkForUpdates(true);
+        }, "deskcat-update-boot");
+        boot.setDaemon(true);
+        boot.start();
 
         Gdx.input.setInputProcessor(new InputAdapter() {
             @Override
@@ -406,6 +421,10 @@ public class CatApp extends ApplicationAdapter {
                 skinMenu.add(items[i]);
             }
             menu.add(skinMenu);
+
+            updateItem = new MenuItem("Check for updates");
+            updateItem.addActionListener(e -> installOrCheck());
+            menu.add(updateItem);
             menu.addSeparator();
 
             MenuItem exit = new MenuItem("Quit DeskCat");
@@ -417,6 +436,63 @@ public class CatApp extends ApplicationAdapter {
             trayOk = true;
         } catch (Throwable t) {
             trayOk = false;   // right-click on the pet quits instead
+        }
+    }
+
+    /** Quiet checks only speak up when an update exists. */
+    private void checkForUpdates(final boolean quiet) {
+        Thread t = new Thread(() -> {
+            Updater.Release r = Updater.fetchLatest();
+            if (r == null) {
+                if (!quiet) {
+                    notifyTray("DeskCat",
+                            "Could not reach GitHub to check for updates.");
+                }
+                return;
+            }
+            if (Updater.isNewer(r.version, VERSION)) {
+                pendingUpdate = r;
+                final String v = r.version;
+                java.awt.EventQueue.invokeLater(() -> {
+                    if (updateItem != null) {
+                        updateItem.setLabel("Install update v" + v);
+                    }
+                });
+                notifyTray("DeskCat update available",
+                        "v" + v + " is out (you have v" + VERSION
+                                + "). Right-click the tray icon to install.");
+            } else if (!quiet) {
+                notifyTray("DeskCat",
+                        "You're on the latest version (v" + VERSION + ").");
+            }
+        }, "deskcat-update-check");
+        t.setDaemon(true);
+        t.start();
+    }
+
+    private void installOrCheck() {
+        final Updater.Release r = pendingUpdate;
+        if (r == null) {
+            checkForUpdates(false);
+            return;
+        }
+        notifyTray("DeskCat", "Downloading v" + r.version + "...");
+        Thread t = new Thread(() -> {
+            java.io.File jar = Updater.runningJar();
+            java.io.File dl = jar != null ? Updater.download(r) : null;
+            if (jar != null && dl != null && Updater.stageSwap(dl, jar)) {
+                Gdx.app.postRunnable(() -> Gdx.app.exit());
+            } else {
+                Updater.openReleasePage(r);   // dev mode or download failed
+            }
+        }, "deskcat-update-install");
+        t.setDaemon(true);
+        t.start();
+    }
+
+    private void notifyTray(String title, String msg) {
+        if (trayIcon != null) {
+            trayIcon.displayMessage(title, msg, TrayIcon.MessageType.INFO);
         }
     }
 

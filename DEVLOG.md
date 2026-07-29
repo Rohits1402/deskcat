@@ -147,6 +147,22 @@ art, Squirtle first.
   the tray tooltip shows the active skin.
 - `.gitignore` extended with IntelliJ artifacts (`.idea/`, `local.properties`).
 
+## 13. Packaging and auto-updater
+
+- Added `fatJar` Gradle task producing a single runnable
+  `deskcat-X.Y.Z.jar` (all deps + LWJGL natives merged), and
+  `CatApp.VERSION` kept in sync with it.
+- New `Updater.java`: checks GitHub Releases (latest tag vs. running
+  version) quietly ~8 s after startup and on demand via the tray's new
+  "Check for updates" item. On a newer release: tray balloon + the item
+  becomes "Install update vX" → downloads the jar asset, spawns a script
+  that waits for exit, swaps the jar in place, and relaunches with the same
+  JVM. In dev mode (gradle classes, no jar) it opens the release page
+  instead. All failures degrade silently to "no update UI."
+- This carves the one sanctioned exception into the no-network rule: the
+  user-visible update check/download. Still no telemetry — nothing is sent.
+- First packaged release: **v1.0.0** on the repo's releases page.
+
 ## Current state
 
 - **Skins**: Squirtle (default, procedural), Pikachu (character maps), and
