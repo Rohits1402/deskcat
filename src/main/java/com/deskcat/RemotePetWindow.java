@@ -44,6 +44,7 @@ public class RemotePetWindow implements ApplicationListener {
 
     private float time, winXf = -1, winYf;
     private int lastScale;
+    private boolean clickThrough;
     private float blinkIn = 3f, blinkLeft;
     private int tailFrame;
     private float tailTime;
@@ -200,12 +201,23 @@ public class RemotePetWindow implements ApplicationListener {
             winXf = tx;
             winYf = ty;
         } else {
-            // ease toward the last reported spot; state arrives at only ~5 Hz
-            float k = Math.min(1f, dt * 10f);
+            // light easing over the 60 Hz state stream smooths packet jitter
+            float k = Math.min(1f, dt * 30f);
             winXf += (tx - winXf) * k;
             winYf += (ty - winYf) * k;
         }
         window.setPosition(Math.round(winXf), Math.round(winYf));
+
+        // while overlapping the local pet, go click-through so it stays
+        // draggable underneath; clickable again once apart
+        int w = CatApp.winW(), h = CatApp.winH();
+        int x = Math.round(winXf), y = Math.round(winYf);
+        boolean overlap = x < CatApp.mainWinX + w && x + w > CatApp.mainWinX
+                && y < CatApp.mainWinY + h && y + h > CatApp.mainWinY;
+        if (overlap != clickThrough) {
+            clickThrough = overlap;
+            WindowTricks.setClickThrough(window, overlap);
+        }
     }
 
     private void updateBlink(float dt) {

@@ -3,8 +3,12 @@ package com.deskcat.net;
 import java.net.DatagramPacket;
 import java.net.InetAddress;
 import java.net.MulticastSocket;
+import java.net.NetworkInterface;
 import java.nio.charset.Charset;
+import java.util.Enumeration;
+import java.util.HashSet;
 import java.util.Queue;
+import java.util.Set;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
 /**
@@ -20,6 +24,7 @@ public class LanClient {
 
     private final String selfId;
     private final Queue<LanMsg> inbox = new ConcurrentLinkedQueue<LanMsg>();
+    private final Set<InetAddress> localAddrs = new HashSet<InetAddress>();
     private MulticastSocket socket;
     private InetAddress group;
     private volatile boolean running;
@@ -36,6 +41,7 @@ public class LanClient {
             socket.setLoopbackMode(false);   // deliver our own datagrams too:
                                              // lets two instances on one PC see each other
             socket.joinGroup(group);
+            collectLocalAddresses();
             running = true;
             Thread rx = new Thread(this::recvLoop, "deskcat-lan-rx");
             rx.setDaemon(true);
@@ -44,6 +50,20 @@ public class LanClient {
         } catch (Throwable t) {
             close();
             return false;
+        }
+    }
+
+    private void collectLocalAddresses() {
+        try {
+            Enumeration<NetworkInterface> ifs = NetworkInterface.getNetworkInterfaces();
+            while (ifs != null && ifs.hasMoreElements()) {
+                Enumeration<InetAddress> addrs = ifs.nextElement().getInetAddresses();
+                while (addrs.hasMoreElements()) {
+                    localAddrs.add(addrs.nextElement());
+                }
+            }
+        } catch (Throwable t) {
+            // detection unavailable: same-host peers just get mirror windows
         }
     }
 
@@ -56,6 +76,9 @@ public class LanClient {
                 LanMsg m = LanProtocol.decode(
                         new String(pkt.getData(), pkt.getOffset(), pkt.getLength(), UTF8));
                 if (m != null && !selfId.equals(m.id)) {
+                    m.sameHost = pkt.getAddress() != null
+                            && (pkt.getAddress().isLoopbackAddress()
+                                    || localAddrs.contains(pkt.getAddress()));
                     inbox.add(m);
                 }
             } catch (Throwable t) {

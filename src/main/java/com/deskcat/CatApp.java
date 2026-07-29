@@ -93,6 +93,9 @@ public class CatApp extends ApplicationAdapter {
     /** Display name shown to LAN peers; set by the launcher. */
     public static String userName = System.getProperty("user.name", "DeskCat");
 
+    /** Live main-window position, read by remote windows for overlap checks. */
+    public static volatile int mainWinX, mainWinY;
+
     // per-skin geometry and style, set in create()
     private int tailX;
     private int eyeLX, eyeRX, eyeW, eyeH, eyeY, eyeStyle;
@@ -355,7 +358,9 @@ public class CatApp extends ApplicationAdapter {
                 int taskbarTop = b.y + b.height - ins.bottom;
                 GLFW.glfwSetWindowAttrib(window.getWindowHandle(),
                         GLFW.GLFW_FLOATING, GLFW.GLFW_FALSE);
-                window.setPosition(window.getPositionX(), taskbarTop - 17 * scale);
+                // head top sits ~14 units below the window top; leave ~8 units
+                // of head poking out above the taskbar
+                window.setPosition(window.getPositionX(), taskbarTop - 22 * scale);
             } catch (Throwable t) {
                 hidden = false;
             }
@@ -378,7 +383,7 @@ public class CatApp extends ApplicationAdapter {
 
         stateTick -= dt;
         if (stateTick <= 0f) {
-            stateTick = 0.2f;   // 5 Hz presence/pose broadcast
+            stateTick = 1 / 60f;   // 60 Hz pose sync — trivial bandwidth on a LAN
             Rectangle ub = remoteMgr.usable();
             float xf = (window.getPositionX() - ub.x)
                     / (float) Math.max(1, ub.width - winW());
@@ -655,6 +660,9 @@ public class CatApp extends ApplicationAdapter {
     public void render() {
         float dt = Math.min(Gdx.graphics.getDeltaTime(), 1 / 20f);
         time += dt;
+
+        mainWinX = window.getPositionX();
+        mainWinY = window.getPositionY();
 
         pollCursor(dt);
         updateMood(dt);

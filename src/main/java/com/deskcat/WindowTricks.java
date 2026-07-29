@@ -23,6 +23,26 @@ public final class WindowTricks {
     }
 
     /**
+     * Toggle click-through without re-hiding the window (no flicker). Remote
+     * pet windows turn this on while overlapping the local pet so it stays
+     * draggable underneath them. No-op off Windows.
+     */
+    public static void setClickThrough(Lwjgl3Window window, boolean on) {
+        try {
+            long hwnd = org.lwjgl.glfw.GLFWNativeWin32
+                    .glfwGetWin32Window(window.getWindowHandle());
+            long ex = org.lwjgl.system.windows.User32.GetWindowLongPtr(hwnd, GWL_EXSTYLE);
+            long want = on ? ex | WS_EX_LAYERED | WS_EX_TRANSPARENT
+                    : ex & ~WS_EX_TRANSPARENT;
+            if (want != ex) {
+                org.lwjgl.system.windows.User32.SetWindowLongPtr(hwnd, GWL_EXSTYLE, want);
+            }
+        } catch (Throwable t) {
+            // non-Windows or API unavailable
+        }
+    }
+
+    /**
      * Remove the taskbar button and, for view-only windows (remote pets),
      * make the window click-through so it never steals mouse input.
      * No-op off Windows.

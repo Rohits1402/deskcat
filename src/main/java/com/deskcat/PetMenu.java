@@ -1,17 +1,20 @@
 package com.deskcat;
 
 import java.awt.Component;
+import java.awt.Window;
 
+import javax.swing.JFrame;
 import javax.swing.JMenuItem;
 import javax.swing.JPopupMenu;
-import javax.swing.JWindow;
 import javax.swing.SwingUtilities;
 import javax.swing.event.PopupMenuEvent;
 import javax.swing.event.PopupMenuListener;
 
 /**
  * Small right-click context menu shown at a screen position (the pets have no
- * window chrome, so an invisible 1x1 anchor window hosts the popup).
+ * window chrome, so an invisible 1x1 anchor window hosts the popup — an
+ * undecorated utility JFrame, since ownerless JWindows can't take focus on
+ * Windows and the popup's clicks then misbehave).
  * Actions run on the EDT — wrap GL work in Gdx.app.postRunnable.
  */
 public final class PetMenu {
@@ -32,12 +35,14 @@ public final class PetMenu {
     /** Safe to call from the GL thread. */
     public static void show(int screenX, int screenY, Item... items) {
         SwingUtilities.invokeLater(() -> {
-            JWindow anchor = new JWindow();
-            anchor.setFocusableWindowState(true);
+            JFrame anchor = new JFrame();
+            anchor.setUndecorated(true);
+            anchor.setType(Window.Type.UTILITY);   // no taskbar button
             anchor.setAlwaysOnTop(true);
             anchor.setSize(1, 1);
             anchor.setLocation(screenX, screenY);
             anchor.setVisible(true);
+            anchor.toFront();
 
             JPopupMenu menu = new JPopupMenu();
             for (Item it : items) {

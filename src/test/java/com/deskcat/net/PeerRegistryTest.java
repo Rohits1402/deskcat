@@ -77,6 +77,18 @@ public class PeerRegistryTest {
     }
 
     @Test
+    public void sameHostFlagPropagatesAndSticks() {
+        PeerRegistry reg = new PeerRegistry("me");
+        LanMsg first = state("p1", "Ana");
+        first.sameHost = true;
+        reg.onMessage(first, 1000);
+        assertTrue(reg.byName("Ana").sameHost);
+        // a later message without the flag must not clear it
+        reg.onMessage(state("p1", "Ana"), 2000);
+        assertTrue(reg.byName("Ana").sameHost);
+    }
+
+    @Test
     public void byNameIsCaseInsensitive() {
         PeerRegistry reg = new PeerRegistry("me");
         reg.onMessage(state("p1", "Ana"), 1000);

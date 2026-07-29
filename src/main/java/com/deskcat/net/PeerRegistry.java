@@ -37,6 +37,7 @@ public class PeerRegistry {
             peers.put(m.id, p);
         }
         p.lastSeenMs = nowMs;
+        p.sameHost |= m.sameHost;
         if (m.type == LanMsg.STATE) {
             p.name = m.name;
             p.skin = m.skin;

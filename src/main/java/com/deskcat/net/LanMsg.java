@@ -28,4 +28,9 @@ public class LanMsg {
     public String text;
     /** Empty for broadcast chat, a peer id for a DM. */
     public String target;
+    /**
+     * Set by the receiver when the datagram came from this same machine
+     * (another instance on this PC) — such peers get no mirror window.
+     */
+    public boolean sameHost;
 }

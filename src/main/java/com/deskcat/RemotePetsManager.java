@@ -65,6 +65,9 @@ public class RemotePetsManager {
     public void sync(Collection<Peer> peers) {
         Set<String> live = new HashSet<String>();
         for (Peer p : peers) {
+            if (p.sameHost) {
+                continue;   // another instance on this PC — its pet is already visible
+            }
             live.add(p.id);
             if (!windows.containsKey(p.id)) {
                 windows.put(p.id, open(p));

@@ -14,6 +14,8 @@ public class Peer {
     public boolean facingLeft;
     public int anim = LanMsg.ANIM_IDLE;
     public long lastSeenMs;
+    /** Another instance on this same machine — no mirror window for it. */
+    public boolean sameHost;
 
     /** Active speech bubble; empty when silent. */
     public final com.deskcat.Bubble bubble = new com.deskcat.Bubble();
