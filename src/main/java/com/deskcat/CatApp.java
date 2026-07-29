@@ -214,6 +214,8 @@ public class CatApp extends ApplicationAdapter {
     private OrthographicCamera pxCam;
     private float stateTick;
     private final Bubble ownBubble = new Bubble();
+    /** Countdown until an incoming pellet lands and we flinch. */
+    private float pendingShotIn = -1f;
 
     // tucked behind the taskbar via the right-click menu
     private boolean hidden;
@@ -409,11 +411,18 @@ public class CatApp extends ApplicationAdapter {
             if (m.type == LanMsg.ACTION && "shoot".equals(m.action)
                     && (m.target == null || m.target.isEmpty()
                             || m.target.equals(selfId))) {
-                reactToShot();
+                incomingShot(m.id);
             }
         }
         peerReg.prune(now);
         remoteMgr.sync(peerReg.peers());
+
+        if (pendingShotIn > 0f) {
+            pendingShotIn -= dt;
+            if (pendingShotIn <= 0f) {
+                reactToShot();
+            }
+        }
 
         stateTick -= dt;
         if (stateTick <= 0f) {
@@ -479,10 +488,41 @@ public class CatApp extends ApplicationAdapter {
     private void shoot(String targetId) {
         lan.send(LanProtocol.encodeAction(selfId, userName, "shoot", targetId));
         attack();   // our pet plays its signature attack as the muzzle flash
+        float fromX = window.getPositionX() + winW() / 2f;
+        float fromY = window.getPositionY() + winH() / 2f;
+        for (Peer p : peerReg.peers()) {
+            if (targetId == null || targetId.equals(p.id)) {
+                ProjectileFx.fire((Lwjgl3Application) Gdx.app, fromX, fromY,
+                        peerCenterX(p), peerCenterY(p));
+            }
+        }
         wake();
     }
 
-    /** Someone shot us: flinch hard. */
+    private float peerCenterX(Peer p) {
+        Rectangle ub = remoteMgr.usable();
+        return ub.x + p.xFrac * Math.max(1, ub.width - winW()) + winW() / 2f;
+    }
+
+    private float peerCenterY(Peer p) {
+        Rectangle ub = remoteMgr.usable();
+        return ub.y + p.yFrac * Math.max(1, ub.height - winH()) + winH() / 2f;
+    }
+
+    /** Someone shot us: incoming pellet, then flinch on impact. */
+    private void incomingShot(String shooterId) {
+        Peer shooter = peerReg.byId(shooterId);
+        float toX = window.getPositionX() + winW() / 2f;
+        float toY = window.getPositionY() + winH() / 2f;
+        if (shooter != null) {
+            float fromX = peerCenterX(shooter), fromY = peerCenterY(shooter);
+            ProjectileFx.fire((Lwjgl3Application) Gdx.app, fromX, fromY, toX, toY);
+            pendingShotIn = ProjectileFx.duration(fromX, fromY, toX, toY);
+        } else {
+            reactToShot();   // unknown shooter: no pellet, just the hit
+        }
+    }
+
     private void reactToShot() {
         wake();
         alertLeft = 1.2f;

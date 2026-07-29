@@ -69,6 +69,10 @@ public class PeerRegistry {
         return removed;
     }
 
+    public Peer byId(String id) {
+        return peers.get(id);
+    }
+
     public Peer byName(String name) {
         for (Peer p : peers.values()) {
             if (p.name.equalsIgnoreCase(name)) {
