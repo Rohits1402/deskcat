@@ -40,11 +40,16 @@ test {
     useJUnit()
 }
 
-// double-clickable everything-included jar: java -jar deskcat.jar [skin] [name]
-task fatJar(type: Jar) {
+// double-clickable everything-included jar:
+// java -jar deskcat-X.Y.Z.jar [skin] [name]
+// version must stay in sync with CatApp.VERSION (release process in CLAUDE.md)
+tasks.register('fatJar', Jar) {
     archiveBaseName = 'deskcat'
+    archiveVersion = '1.0.0'
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
     manifest {
-        attributes 'Main-Class': 'com.deskcat.DesktopLauncher'
+        attributes 'Main-Class': 'com.deskcat.DesktopLauncher',
+                   'Implementation-Version': '1.0.0'
     }
     from sourceSets.main.output
     from {
@@ -53,5 +58,4 @@ task fatJar(type: Jar) {
         }
     }
     exclude 'META-INF/*.SF', 'META-INF/*.DSA', 'META-INF/*.RSA'
-    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
 }

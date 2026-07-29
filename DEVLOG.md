@@ -192,6 +192,32 @@ separately by another dev — the LAN work reads the launch args for now
 - Verified live: two instances (Squirtle "Rajat" + Pikachu "Dev2") found
   each other over multicast, remote windows rendered transparent with name
   labels.
+- Post-testing fixes: chat input and pet menus moved to undecorated utility
+  JFrames (ownerless JWindows can't take focus on Windows — typing and menu
+  clicks were dead), remote windows turn click-through while overlapping the
+  local pet so it stays draggable, same-machine peers are detected by source
+  address and get no mirror window (no more duplicate pets when testing two
+  instances on one PC), pose sync raised 5 Hz → 60 Hz, hide-behind-taskbar
+  peek enlarged. 27 tests.
+
+## 14. Packaging and auto-updater
+
+- Added `fatJar` Gradle task producing a single runnable
+  `deskcat-X.Y.Z.jar` (all deps + LWJGL natives merged), and
+  `CatApp.VERSION` kept in sync with it.
+- New `Updater.java`: checks GitHub Releases (latest tag vs. running
+  version) quietly ~8 s after startup and on demand via the tray's new
+  "Check for updates" item. On a newer release: tray balloon + the item
+  becomes "Install update vX" → downloads the jar asset, spawns a script
+  that waits for exit, swaps the jar in place, and relaunches with the same
+  JVM. In dev mode (gradle classes, no jar) it opens the release page
+  instead. All failures degrade silently to "no update UI."
+- This carves the one sanctioned exception into the no-network rule: the
+  user-visible update check/download. Still no telemetry — nothing is sent.
+- First packaged release: **v1.0.0** on the repo's releases page.
+- Merge note: the LAN branch and this work both added a `fatJar` task —
+  unified into one (versioned name + `Implementation-Version` from main,
+  tuned JVM defaults and UTF-8 compile encoding from the branch).
 
 ## Current state
 
