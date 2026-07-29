@@ -21,8 +21,16 @@ taskbar-free window and reacts to what you do — inspired by desktop pets like
   and paces endlessly between the edges; any mouse or keyboard input sends it
   hurrying back to exactly where it was.
 - **Sleep** — after a minute of idle it dozes off with floating Zzz.
-- **System tray** — no taskbar button; the tray icon hosts a live skin
-  switcher and the quit menu.
+- **Stretch and water reminders** — opt-in from the tray: every 30 minutes
+  the pet rises into a long tall stretch so you stretch along; every 45
+  minutes it hops and fountains water droplets to remind you to drink.
+  Both come with a tray notification and a chirp.
+- **Sound effects** — a zap, a splash, and a mew-like chirp, all
+  synthesized in code (no audio files); mute from the tray.
+- **Start with Windows** — one tray checkbox registers the packaged
+  jar/exe in the per-user Run key (HKCU); untick to remove it.
+- **System tray** — no taskbar button; the tray icon hosts the skin
+  switcher, reminders, sound and startup toggles, updates, and quit.
 
 ## Skins
 
@@ -88,4 +96,6 @@ the app's only network access; nothing is ever sent.
 - Wandering moves the OS window itself along the bottom of the work area.
 
 No telemetry. The only network access is the update check against GitHub
-Releases; the only files written are the updater's own temp files.
+Releases; the only files written are the updater's own temp files; the only
+registry touch is the optional user-toggled startup entry. Reminder settings
+are session-only — nothing is persisted.

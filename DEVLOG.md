@@ -175,6 +175,22 @@ art, Squirtle first.
 - The auto-updater still functions inside the app image (it swaps the jar
   under `app/`), provided the folder sits somewhere user-writable.
 
+## 15. Reminders, sound effects, launch at startup
+
+- **Stretch/water reminders** (tray > Reminders, opt-in, session-only):
+  every 30 min the pet performs a long tall stretch (spring target 1.5,
+  eyes closed mid-stretch) so the user stretches along; every 45 min it
+  hops and fountains water droplets overhead. Both post a tray balloon,
+  chirp, and call the pet home first if it's out patrolling.
+- **SoundFx**: procedurally synthesized PCM — thunderbolt zap (noise +
+  descending square), water-gun splash (noise + rising bubble sweeps),
+  and a mew-like chirp (vibrato sine sweep) for startles and reminders.
+  No audio files; tray "Sound" checkbox mutes.
+- **Start with Windows**: tray checkbox writing the per-user
+  `HKCU\...\Run` key via reg.exe — registers the packaged exe (preferred)
+  or `javaw -jar`; dev runs explain they can't be registered. Unticking
+  deletes the value.
+
 ## Current state
 
 - **Skins**: Squirtle (default, procedural), Pikachu (character maps), and

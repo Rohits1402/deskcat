@@ -43,8 +43,13 @@ Key mechanics that span the codebase:
 - Pokémon-inspired skins (Squirtle, Pikachu) are personal-use fan art — must be stripped before any public release; the cat is the only shippable original character.
 - No telemetry. The ONLY sanctioned network access is the GitHub Releases
   update check/download in [Updater.java](src/main/java/com/deskcat/Updater.java);
-  the only runtime file writes are that updater's temp jar + swap script.
-  Never add anything beyond that.
+  the only runtime file writes are that updater's temp jar + swap script; the
+  only registry access is the user-toggled `HKCU\...\Run` startup entry
+  (via `reg.exe`). Never add anything beyond those. Reminder/sound settings
+  are deliberately session-only — do not add a config file.
+- Sounds are synthesized PCM in
+  [SoundFx.java](src/main/java/com/deskcat/SoundFx.java) (no audio assets);
+  each play opens a short-lived `AudioDevice` on a daemon thread.
 - Releases: bump `CatApp.VERSION` and the `fatJar` version in
   [build.gradle](build.gradle) together, run `gradle fatJar`, then
   `gh release create vX.Y.Z build/libs/deskcat-X.Y.Z.jar`. The updater
