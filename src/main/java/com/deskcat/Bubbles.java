@@ -185,6 +185,32 @@ public final class Bubbles {
         return lines;
     }
 
+    /**
+     * Would this text at this scale fit inside a pet window? When not, the
+     * bubble escapes into its own overlay window (BubbleFx).
+     */
+    public static boolean fits(BitmapFont font, String text, float scale,
+            int winW, float topY) {
+        font.getData().setScale(Math.max(0.5f, scale));
+        try {
+            Measurer m = s -> {
+                LAYOUT.setText(font, s);
+                return LAYOUT.width;
+            };
+            float maxTextW = winW - 28;
+            float widestWord = 0;
+            for (String word : text.trim().split("\\s+")) {
+                widestWord = Math.max(widestWord, m.width(word));
+            }
+            int maxLines = scale >= 2f ? 2 : (scale > 1.2f ? 3 : MAX_LINES);
+            List<String> lines = wrap(m, text, maxTextW, maxLines);
+            return widestWord <= maxTextW
+                    && lines.size() * font.getLineHeight() + 10 <= topY;
+        } finally {
+            font.getData().setScale(1f);
+        }
+    }
+
     /** Truncate with an ellipsis so a single line always fits. */
     static String fitText(Measurer m, String text, float maxW) {
         if (m.width(text) <= maxW) {

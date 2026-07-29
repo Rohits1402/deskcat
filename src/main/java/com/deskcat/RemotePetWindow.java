@@ -44,14 +44,14 @@ public class RemotePetWindow implements ApplicationListener {
     private final GlyphLayout layout = new GlyphLayout();
 
     private float time, winXf = -1, winYf;
+    private long bubbleSpawned;
     private int lastScale;
     private boolean clickThrough;
     private float blinkIn = 3f, blinkLeft;
 
-    // fade in on appearance; stay slightly translucent so remote pets read
-    // as visitors rather than locals
+    // fade in on appearance; base translucency comes from the tray's
+    // Peer fade setting (CatApp.peerAlpha)
     private float appear;
-    private static final float BASE_ALPHA = 0.9f;
     private int tailFrame;
     private float tailTime;
     private static final int[] TAIL_CYCLE = {0, 1, 2, 1};
@@ -107,7 +107,7 @@ public class RemotePetWindow implements ApplicationListener {
         float dt = Math.min(Gdx.graphics.getDeltaTime(), 1 / 20f);
         time += dt;
         appear = Math.min(1f, appear + dt / 0.4f);
-        float ga = appear * BASE_ALPHA;
+        float ga = appear * CatApp.peerAlpha;
 
         if (lastScale != CatApp.scale) {
             lastScale = CatApp.scale;
@@ -132,19 +132,24 @@ public class RemotePetWindow implements ApplicationListener {
         float bob = walking ? Math.abs(MathUtils.sin(time * 9f)) * 0.8f : 0f;
         float stretch = peer.anim == LanMsg.ANIM_DRAG ? 1.15f : 1f;
         float sx = peer.facingLeft ? -1f : 1f;
+        // shot: shown lying on its side until the sender recovers
+        float rot = peer.anim == LanMsg.ANIM_KO ? -90f : 0f;
 
         // body + tail drawn mirrored around the window center when facing left
         float cx = CatApp.UNITS_W / 2f;
         batch.setColor(1f, 1f, 1f, ga);
         Texture tail = a.tailTex[TAIL_CYCLE[tailFrame]];
-        drawMirrored(tail, cx, a.tailX + 2 - cx, bob, sx, stretch,
+        drawMirrored(tail, cx, a.tailX + 2 - cx, bob, sx, stretch, rot,
                 tail.getWidth(), tail.getHeight());
-        drawMirrored(a.bodyTex, cx, 4 - cx, bob, sx, stretch,
+        drawMirrored(a.bodyTex, cx, 4 - cx, bob, sx, stretch, rot,
                 a.bodyTex.getWidth(), a.bodyTex.getHeight());
 
-        boolean closed = sleeping || blinkLeft > 0f;
-        drawEye(a, a.eyeLX + 2, closed, bob, sx, cx, ga);
-        drawEye(a, a.eyeRX + 2, closed, bob, sx, cx, ga);
+        boolean closed = sleeping || blinkLeft > 0f
+                || peer.anim == LanMsg.ANIM_KO;
+        if (rot == 0f) {
+            drawEye(a, a.eyeLX + 2, closed, bob, sx, cx, ga);
+            drawEye(a, a.eyeRX + 2, closed, bob, sx, cx, ga);
+        }
 
         batch.end();
 
@@ -165,19 +170,28 @@ public class RemotePetWindow implements ApplicationListener {
 
         long now = System.currentTimeMillis();
         if (peer.bubble.isActive(now)) {
-            Bubbles.draw(batch, font, px, peer.bubble.text(),
-                    peer.bubble.alpha(now) * appear,
-                    CatApp.winW(), ly - layout.height - 10,
-                    peer.bubble.scale(), peer.bubble.effect(),
-                    peer.bubble.colorHex(), time);
+            float bubbleTop = ly - layout.height - 10;
+            if (Bubbles.fits(font, peer.bubble.text(), peer.bubble.scale(),
+                    CatApp.winW(), bubbleTop)) {
+                Bubbles.draw(batch, font, px, peer.bubble.text(),
+                        peer.bubble.alpha(now) * appear,
+                        CatApp.winW(), bubbleTop,
+                        peer.bubble.scale(), peer.bubble.effect(),
+                        peer.bubble.colorHex(), time);
+            } else if (bubbleSpawned != peer.bubble.untilMs()) {
+                bubbleSpawned = peer.bubble.untilMs();
+                BubbleFx.spawn((com.badlogic.gdx.backends.lwjgl3.Lwjgl3Application) Gdx.app,
+                        font, peer.bubble,
+                        () -> new float[] {winXf + CatApp.winW() / 2f, winYf});
+            }
         }
         batch.end();
     }
 
     private void drawMirrored(Texture tex, float cx, float relX, float bob,
-            float sx, float stretch, float w, float h) {
+            float sx, float stretch, float rot, float w, float h) {
         float x = sx > 0 ? cx + relX : cx - relX - w;
-        batch.draw(tex, x, bob, w / 2f, 0f, w, h, 1f, stretch, 0f,
+        batch.draw(tex, x, bob, w / 2f, 0f, w, h, 1f, stretch, rot,
                 0, 0, tex.getWidth(), tex.getHeight(), sx < 0, false);
     }
 

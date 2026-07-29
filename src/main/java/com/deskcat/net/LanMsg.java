@@ -17,6 +17,8 @@ public class LanMsg {
     public static final int ANIM_WALK = 1;
     public static final int ANIM_SLEEP = 2;
     public static final int ANIM_DRAG = 3;
+    /** Knocked over by a shot. */
+    public static final int ANIM_KO = 4;
 
     public char type;
     public String id;

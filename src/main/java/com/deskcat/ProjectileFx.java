@@ -54,6 +54,9 @@ public class ProjectileFx implements ApplicationListener {
         cfg.setWindowedMode(SIZE, SIZE);
         cfg.setDecorated(false);
         cfg.setResizable(false);
+        // born hidden: styles are applied first, then shown — otherwise a
+        // taskbar button flashes and the pellet spends its life mid hide/show
+        cfg.setInitialVisible(false);
         cfg.setWindowPosition(Math.round(fromX) - SIZE / 2,
                 Math.round(fromY) - SIZE / 2);
         app.newWindow(new ProjectileFx(fromX, fromY, toX, toY), cfg);

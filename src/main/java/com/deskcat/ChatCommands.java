@@ -19,7 +19,8 @@ import java.util.Map;
 public final class ChatCommands {
 
     public static final float MIN_SCALE = 0.5f;
-    public static final float MAX_SCALE = 4f;
+    /** Effectively uncapped — the screen size is the real limit. */
+    public static final float MAX_SCALE = 64f;
     /** Font px treated as scale 1.0 in "/size N". */
     static final float BASE_SIZE = 16f;
 

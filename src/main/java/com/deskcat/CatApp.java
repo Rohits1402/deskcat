@@ -99,6 +99,9 @@ public class CatApp extends ApplicationAdapter {
     /** Live main-window position, read by remote windows for overlap checks. */
     public static volatile int mainWinX, mainWinY;
 
+    /** Opacity of remote peers' pets (tray → Peer fade). */
+    public static volatile float peerAlpha = 0.9f;
+
     // per-skin geometry and style, set in create()
     private int tailX;
     private int eyeLX, eyeRX, eyeW, eyeH, eyeY, eyeStyle;
@@ -214,8 +217,15 @@ public class CatApp extends ApplicationAdapter {
     private OrthographicCamera pxCam;
     private float stateTick;
     private final Bubble ownBubble = new Bubble();
+    private long ownBubbleSpawned;
     /** Countdown until an incoming pellet lands and we flinch. */
     private float pendingShotIn = -1f;
+    private int pendingShotDir = 1;
+
+    // knocked out by a shot: squish flat or fall over 90°, then get back up
+    private static final float KO_TOTAL = 1.6f;
+    private float koT;
+    private int koMode, koDir = 1;
 
     // tucked behind the taskbar via the right-click menu
     private boolean hidden;
@@ -438,7 +448,8 @@ public class CatApp extends ApplicationAdapter {
                     / (float) Math.max(1, ub.width - winW());
             float yf = (window.getPositionY() - ub.y)
                     / (float) Math.max(1, ub.height - winH());
-            int anim = dragging ? LanMsg.ANIM_DRAG
+            int anim = koT > 0f ? LanMsg.ANIM_KO
+                    : dragging ? LanMsg.ANIM_DRAG
                     : sleeping ? LanMsg.ANIM_SLEEP
                     : (wanderState == 2 || wanderState == 3) ? LanMsg.ANIM_WALK
                     : LanMsg.ANIM_IDLE;
@@ -524,7 +535,9 @@ public class CatApp extends ApplicationAdapter {
             float fromX = peerCenterX(shooter), fromY = peerCenterY(shooter);
             ProjectileFx.fire((Lwjgl3Application) Gdx.app, fromX, fromY, toX, toY);
             pendingShotIn = ProjectileFx.duration(fromX, fromY, toX, toY);
+            pendingShotDir = fromX < toX ? -1 : 1;   // fall away from the shot
         } else {
+            pendingShotDir = MathUtils.randomBoolean() ? -1 : 1;
             reactToShot();   // unknown shooter: no pellet, just the hit
         }
     }
@@ -532,6 +545,9 @@ public class CatApp extends ApplicationAdapter {
     private void reactToShot() {
         wake();
         alertLeft = 1.2f;
+        koT = KO_TOTAL;
+        koMode = MathUtils.randomBoolean() ? 0 : 1;   // fall over / squish flat
+        koDir = pendingShotDir;
         squash.kick(-6f);
         sparkBurst(CAT_X + eyeCenterX, 18f, 12, sparkTex, 16f, 4f, 12f);
     }
@@ -604,9 +620,20 @@ public class CatApp extends ApplicationAdapter {
 
     private static final String[] SKINS = {"squirtle", "pikachu", "cat"};
 
+    // one tray icon per machine: the first instance binds this loopback port
+    // and owns the tray; later instances quit via the pet's right-click menu
+    private java.net.ServerSocket trayLock;
+
     private void setupTray() {
         try {
             if (!SystemTray.isSupported()) {
+                return;
+            }
+            try {
+                trayLock = new java.net.ServerSocket(42108, 1,
+                        java.net.InetAddress.getByName("127.0.0.1"));
+            } catch (Throwable taken) {
+                trayOk = false;   // another instance already shows the tray
                 return;
             }
             PopupMenu menu = new PopupMenu();
@@ -665,6 +692,25 @@ public class CatApp extends ApplicationAdapter {
                 gapMenu.add(gapItems[i]);
             }
             menu.add(gapMenu);
+
+            // how transparent other people's pets render
+            Menu fadeMenu = new Menu("Peer fade");
+            String[] fadeNames = {"Off", "Light", "Heavy"};
+            float[] fadeVals = {1f, 0.9f, 0.55f};
+            final CheckboxMenuItem[] fadeItems = new CheckboxMenuItem[fadeVals.length];
+            for (int i = 0; i < fadeVals.length; i++) {
+                final int idx = i;
+                fadeItems[i] = new CheckboxMenuItem(fadeNames[i],
+                        Math.abs(fadeVals[i] - peerAlpha) < 0.01f);
+                fadeItems[i].addItemListener(e -> {
+                    for (int j = 0; j < fadeItems.length; j++) {
+                        fadeItems[j].setState(j == idx);
+                    }
+                    peerAlpha = fadeVals[idx];
+                });
+                fadeMenu.add(fadeItems[i]);
+            }
+            menu.add(fadeMenu);
 
             Menu remindMenu = new Menu("Reminders");
             final CheckboxMenuItem stretchItem =
@@ -990,6 +1036,7 @@ public class CatApp extends ApplicationAdapter {
         boltLeft -= dt;
         waterLeft -= dt;
         typingLeft -= dt;
+        koT -= dt;
         stretchLeft -= dt;
         waterRemindLeft -= dt;
 
@@ -1416,8 +1463,36 @@ public class CatApp extends ApplicationAdapter {
             bob = Math.abs(MathUtils.sin(time * 7f)) * 1.2f * amp;
             waddle = MathUtils.sin(time * 7f) * 3.5f * amp;
         }
+
+        // knocked out by a shot: fall over 90° or squish flat, then recover
+        float drawScaleY = scaleY;
+        if (koT > 0f) {
+            float e = KO_TOTAL - koT;
+            if (koMode == 0) {
+                float rot;
+                if (e < 0.25f) {
+                    rot = 90f * (e / 0.25f);              // topple
+                } else if (e < 1.1f) {
+                    rot = 90f;                            // lie there
+                } else {
+                    rot = 90f * (1f - (e - 1.1f) / 0.5f); // get back up
+                }
+                waddle += rot * koDir;
+            } else {
+                float squish;
+                if (e < 0.15f) {
+                    squish = 1f - 0.75f * (e / 0.15f);    // flatten
+                } else if (e < 1.0f) {
+                    squish = 0.25f;                       // pancake
+                } else {
+                    squish = 0.25f + 0.75f * Math.min(1f, (e - 1.0f) / 0.6f);
+                }
+                drawScaleY *= squish;
+                scaleX *= 1f + (1f - squish) * 0.6f;      // spread sideways
+            }
+        }
         batch.draw(fboRegion, CAT_X, bob, FBO_W / 2f, 0,
-                FBO_W, FBO_H, scaleX, scaleY, waddle);
+                FBO_W, FBO_H, scaleX, drawScaleY, waddle);
 
         if (boltLeft > 0f && MathUtils.sin(time * 55f) > -0.4f) {
             float a = MathUtils.clamp(boltLeft / 0.3f, 0f, 1f);
@@ -1453,13 +1528,21 @@ public class CatApp extends ApplicationAdapter {
 
         long nowMs = System.currentTimeMillis();
         if (ownBubble.isActive(nowMs)) {
-            batch.setProjectionMatrix(pxCam.combined);
-            batch.begin();
-            Bubbles.draw(batch, font, px, ownBubble.text(),
-                    ownBubble.alpha(nowMs), winW(), winH() - 4,
-                    ownBubble.scale(), ownBubble.effect(),
-                    ownBubble.colorHex(), time);
-            batch.end();
+            if (Bubbles.fits(font, ownBubble.text(), ownBubble.scale(),
+                    winW(), winH() - 4)) {
+                batch.setProjectionMatrix(pxCam.combined);
+                batch.begin();
+                Bubbles.draw(batch, font, px, ownBubble.text(),
+                        ownBubble.alpha(nowMs), winW(), winH() - 4,
+                        ownBubble.scale(), ownBubble.effect(),
+                        ownBubble.colorHex(), time);
+                batch.end();
+            } else if (ownBubbleSpawned != ownBubble.untilMs()) {
+                // too big for the pet window: overlay window, sized to screen
+                ownBubbleSpawned = ownBubble.untilMs();
+                BubbleFx.spawn((Lwjgl3Application) Gdx.app, font, ownBubble,
+                        () -> new float[] {mainWinX + winW() / 2f, mainWinY});
+            }
         }
     }
 
@@ -1467,6 +1550,12 @@ public class CatApp extends ApplicationAdapter {
     public void dispose() {
         if (lan != null) {
             lan.close();
+        }
+        if (trayLock != null) {
+            try {
+                trayLock.close();
+            } catch (Throwable ignored) {
+            }
         }
         SystemAudio.stop();
         try {

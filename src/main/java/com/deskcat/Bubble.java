@@ -61,4 +61,9 @@ public class Bubble {
     public String colorHex() {
         return colorHex;
     }
+
+    /** Expiry timestamp; doubles as an identity for the current message. */
+    public long untilMs() {
+        return untilMs;
+    }
 }

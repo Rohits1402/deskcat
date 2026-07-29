@@ -27,8 +27,9 @@ public class ChatCommandsTest {
     public void sizeIsFontPxAndClamped() {
         assertEquals(50f / 16f, ChatCommands.parse("/size 50 hi").scale, 1e-4);
         assertEquals("hi", ChatCommands.parse("/size 50 hi").text);
+        assertEquals(1000f / 16f, ChatCommands.parse("/size 1000 hi").scale, 1e-4);
         assertEquals(ChatCommands.MAX_SCALE,
-                ChatCommands.parse("/size 500 hi").scale, 0f);
+                ChatCommands.parse("/size 99999 hi").scale, 0f);
         assertEquals(ChatCommands.MIN_SCALE,
                 ChatCommands.parse("/size 1 hi").scale, 0f);
     }

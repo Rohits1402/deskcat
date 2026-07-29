@@ -92,6 +92,7 @@ public class RemotePetsManager {
         cfg.setWindowedMode(CatApp.winW(), CatApp.winH());
         cfg.setDecorated(false);
         cfg.setResizable(false);
+        cfg.setInitialVisible(false);   // shown after the ex-styles are applied
         // transparent framebuffer is inherited from the app configuration
         cfg.setWindowPosition(
                 usable.x + Math.round(peer.xFrac * Math.max(1, usable.width - CatApp.winW())),
