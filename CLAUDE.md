@@ -38,6 +38,8 @@ Key mechanics that span the codebase:
 
 ## Constraints
 
+- Commits: no `Co-Authored-By` trailer, no Claude/AI as author or committer, no generated-with footers. Plain commit messages only.
+
 - Pokémon-inspired skins (Squirtle, Pikachu) are personal-use fan art — must be stripped before any public release; the cat is the only shippable original character.
 - No telemetry, no network calls, no files written at runtime — keep it that way.
 - [DEVLOG.md](DEVLOG.md) is the project history and backlog; append to it when making significant changes.
