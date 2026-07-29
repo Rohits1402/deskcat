@@ -653,6 +653,10 @@ public class CatApp extends ApplicationAdapter {
             updateItem = new MenuItem("Check for updates");
             updateItem.addActionListener(e -> installOrCheck());
             menu.add(updateItem);
+
+            MenuItem notesItem = new MenuItem("Patch notes");
+            notesItem.addActionListener(e -> PatchNotes.show());
+            menu.add(notesItem);
             menu.addSeparator();
 
             MenuItem exit = new MenuItem("Quit DeskCat");
