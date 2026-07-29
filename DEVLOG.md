@@ -262,6 +262,14 @@ separately by another dev — the LAN work reads the launch args for now
 - Dancing yields to everything else: dragging, patrol, kneading,
   attacks, reminders.
 
+## 17. Release v1.1.0
+
+Everything since v1.0.0 in one release: stretch/water reminders, procedural
+sound effects, launch-at-startup, grooving to system audio, and the merged
+LAN presence + chat + size control work (PR #1) with the project's first
+unit tests. Shipped as both the runnable jar and the jpackage exe zip;
+v1.0.0 copies self-update via the tray.
+
 ## Current state
 
 - **Skins**: Squirtle (default, procedural), Pikachu (character maps), and
