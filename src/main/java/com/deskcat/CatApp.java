@@ -287,6 +287,21 @@ public class CatApp extends ApplicationAdapter {
         boot.setDaemon(true);
         boot.start();
 
+        // test hook: DESKCAT_TEST_CHAT="/size 1000 hi" auto-sends a chat
+        // message shortly after launch (drives bubble rendering in CI/dev)
+        String testChat = System.getenv("DESKCAT_TEST_CHAT");
+        if (testChat != null && !testChat.isEmpty()) {
+            Thread t = new Thread(() -> {
+                try {
+                    Thread.sleep(2500);
+                } catch (InterruptedException ignored) {
+                }
+                Gdx.app.postRunnable(() -> sendChat(testChat));
+            }, "deskcat-test-chat");
+            t.setDaemon(true);
+            t.start();
+        }
+
         Gdx.input.setInputProcessor(new InputAdapter() {
             @Override
             public boolean touchDown(int sx, int sy, int pointer, int button) {
@@ -1571,6 +1586,7 @@ public class CatApp extends ApplicationAdapter {
         batch.dispose();
         fbo.dispose();
         font.dispose();
+        Fonts.disposeAll();
         SkinAssets.disposeAll();
         heartTex.dispose();
         zzzTex.dispose();

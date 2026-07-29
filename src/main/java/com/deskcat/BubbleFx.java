@@ -61,17 +61,22 @@ public class BubbleFx implements ApplicationListener {
      * Must be called on the GL thread (it measures with the shared font).
      * Shrinks the requested scale only if the bubble would exceed the screen.
      */
-    public static void spawn(Lwjgl3Application app, BitmapFont font,
+    public static void spawn(Lwjgl3Application app, BitmapFont uiFont,
             Bubble bubble, Anchor anchor) {
         Rectangle usable = RemotePetsManager.usableScreenBounds();
+        // crisp text: render with the high-res font when available, scaled
+        // from its native size to the requested pixel size
+        BitmapFont font = Fonts.big(uiFont);
+        float targetPx = bubble.scale() * 16f;
+        float scale = Fonts.hasBig() ? targetPx / Fonts.BIG_PX : bubble.scale();
         GlyphLayout layout = new GlyphLayout();
         Bubbles.Measurer m = s -> {
             layout.setText(font, s);
             return layout.width;
         };
-        float scale = bubble.scale();
         float maxTextW = usable.width - 60;
         float maxTextH = usable.height - 80;
+        float minScale = Fonts.hasBig() ? 0.1f : 1f;
         float bw, bh;
         while (true) {
             font.getData().setScale(scale);
@@ -81,21 +86,22 @@ public class BubbleFx implements ApplicationListener {
                 bw = Math.max(bw, m.width(line));
             }
             bh = lines.size() * font.getLineHeight() + 10;
-            if ((bw <= maxTextW && bh <= maxTextH) || scale <= 1f) {
+            if ((bw <= maxTextW && bh <= maxTextH) || scale <= minScale) {
                 break;
             }
             scale *= 0.9f;
         }
         font.getData().setScale(1f);
 
-        int w = (int) Math.ceil(bw) + 34;
-        int h = (int) Math.ceil(bh) + 12;
+        // generous margins: the draw-time wrap must never come out tighter
+        // than this measurement, or words hard-split into stacked letters
+        int w = (int) Math.ceil(bw) + 64;
+        int h = (int) Math.ceil(bh) + 24;
         Lwjgl3WindowConfiguration cfg = new Lwjgl3WindowConfiguration();
         cfg.setTitle("DeskCat-bubble");
         cfg.setWindowedMode(w, h);
         cfg.setDecorated(false);
         cfg.setResizable(false);
-        cfg.setInitialVisible(false);   // shown after ex-styles are applied
         float[] p = anchor.pos();
         cfg.setWindowPosition(
                 Math.round(p[0]) - w / 2,
@@ -139,7 +145,7 @@ public class BubbleFx implements ApplicationListener {
         batch.setProjectionMatrix(cam.combined);
         batch.begin();
         Bubbles.draw(batch, font, px, bubble.text(), bubble.alpha(now),
-                winW, winH - 1, effScale, bubble.effect(), bubble.colorHex(),
+                winW, winH - 4f, effScale, bubble.effect(), bubble.colorHex(),
                 time);
         batch.end();
     }

@@ -20,8 +20,8 @@ import java.util.List;
 public final class LanProtocol {
 
     public static final String MAGIC = "DC1";
-    /** Fits any sane message; datagrams beyond this are truncated by recv. */
-    public static final int MAX_PACKET = 1400;
+    /** Receive-buffer size; datagrams beyond this are truncated and dropped. */
+    public static final int MAX_PACKET = 8192;
 
     private LanProtocol() {
     }
