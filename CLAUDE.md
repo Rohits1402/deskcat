@@ -50,6 +50,12 @@ Key mechanics that span the codebase:
 - Sounds are synthesized PCM in
   [SoundFx.java](src/main/java/com/deskcat/SoundFx.java) (no audio assets);
   each play opens a short-lived `AudioDevice` on a daemon thread.
+- [SystemAudio.java](src/main/java/com/deskcat/SystemAudio.java) spawns one
+  PowerShell helper subprocess (inline C# via Add-Type, `-EncodedCommand`,
+  nothing on disk) that streams the Core Audio output PEAK LEVEL — one float
+  per 200 ms. It must never capture audio samples; peak level only. The
+  helper dies with the app (dispose calls stop; a broken stdout pipe ends
+  it if the JVM is hard-killed).
 - Releases: bump `CatApp.VERSION` and the `fatJar` version in
   [build.gradle](build.gradle) together, run `gradle fatJar`, then
   `gh release create vX.Y.Z build/libs/deskcat-X.Y.Z.jar`. The updater

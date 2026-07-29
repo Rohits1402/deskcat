@@ -191,6 +191,21 @@ art, Squirtle first.
   or `javaw -jar`; dev runs explain they can't be registered. Unticking
   deletes the value.
 
+## 16. Grooving to system audio
+
+- New `SystemAudio`: a PowerShell helper (inline C# COM interop against
+  `IAudioMeterInformation`, compiled in memory, launched via
+  `-EncodedCommand` so nothing touches disk) streams the system output
+  peak level at 5 Hz; a daemon thread parses it into a volatile float.
+  Peak level only — no audio capture, ever.
+- When sound is sustained (~0.6 s above threshold, with hysteresis so
+  brief dings don't trigger it), the pet starts dancing: bob + sway
+  scaled by the smoothed loudness envelope, tail at double speed, and
+  musical-note particles floating up. Music also blocks sleep — it
+  grooves instead.
+- Dancing yields to everything else: dragging, patrol, kneading,
+  attacks, reminders.
+
 ## Current state
 
 - **Skins**: Squirtle (default, procedural), Pikachu (character maps), and

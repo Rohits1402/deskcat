@@ -27,6 +27,11 @@ taskbar-free window and reacts to what you do — inspired by desktop pets like
   Both come with a tray notification and a chirp.
 - **Sound effects** — a zap, a splash, and a mew-like chirp, all
   synthesized in code (no audio files); mute from the tray.
+- **Grooves to your music** — when the system is playing audio, the pet
+  bobs and sways with the actual loudness, its tail wags double-time, and
+  musical notes float up. Detection reads only the output peak level (a
+  single loudness number via Windows Core Audio) — no audio is ever
+  captured or recorded.
 - **Start with Windows** — one tray checkbox registers the packaged
   jar/exe in the per-user Run key (HKCU); untick to remove it.
 - **System tray** — no taskbar button; the tray icon hosts the skin

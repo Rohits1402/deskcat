@@ -89,7 +89,7 @@ public class CatApp extends ApplicationAdapter {
     private FrameBuffer fbo;
     private TextureRegion fboRegion;
     private Texture bodyTex, heartTex, zzzTex, alertTex, sparkTex, pawTex, px;
-    private Texture waterDropTex;
+    private Texture waterDropTex, noteTex;
     private Texture[] tailTex;
 
     private Lwjgl3Window window;
@@ -152,6 +152,10 @@ public class CatApp extends ApplicationAdapter {
     private float stretchIn, waterIn;
     private float stretchLeft, waterRemindLeft, remindDropIn;
 
+    // grooving to whatever the system is playing
+    private float musicAmp, musicAbove, musicBelow, noteIn;
+    private boolean musicOn, danceNow;
+
     // keyboard kneading: the global hook only bumps a counter — which keys
     // were pressed is never inspected or stored
     private final AtomicInteger keyTicks = new AtomicInteger();
@@ -187,6 +191,7 @@ public class CatApp extends ApplicationAdapter {
 
         applySkin(skin);
         waterDropTex = PixelArt.fromMap(PixelArt.WATER_DROP);
+        noteTex = PixelArt.fromMap(PixelArt.NOTE);
         heartTex = PixelArt.fromMap(PixelArt.HEART);
         zzzTex = PixelArt.fromMap(PixelArt.ZZZ);
         alertTex = PixelArt.fromMap(PixelArt.ALERT);
@@ -205,6 +210,7 @@ public class CatApp extends ApplicationAdapter {
         hideFromTaskbar();
         setupTray();
         setupKeyboardHook();
+        SystemAudio.start();
 
         Thread boot = new Thread(() -> {
             try {
@@ -776,6 +782,39 @@ public class CatApp extends ApplicationAdapter {
                 SoundFx.chirp();
             }
         }
+        float sysPeak = SystemAudio.peak();
+        musicAmp = MathUtils.lerp(musicAmp, Math.min(1f, sysPeak * 6f), 0.25f);
+        if (!musicOn) {
+            musicAbove = sysPeak > 0.02f ? musicAbove + dt : 0f;
+            if (musicAbove > 0.6f) {
+                musicOn = true;
+                wake();
+            }
+        } else {
+            musicBelow = sysPeak < 0.005f ? musicBelow + dt : 0f;
+            if (musicBelow > 2.5f) {
+                musicOn = false;
+            }
+        }
+        danceNow = musicOn && !sleeping && !dragging && wanderState == 0
+                && boltLeft <= 0f && waterLeft <= 0f && stretchLeft <= 0f
+                && !kneadNow;
+        if (danceNow) {
+            noteIn -= dt;
+            if (noteIn <= 0f) {
+                noteIn = MathUtils.random(0.5f, 0.9f);
+                Particle m = new Particle();
+                m.tex = noteTex;
+                m.x = CAT_X + eyeCenterX + MathUtils.random(-8f, 8f);
+                m.y = 27f;
+                m.vx = MathUtils.random(-2f, 2f);
+                m.vy = MathUtils.random(5f, 8f);
+                m.maxLife = 1.7f;
+                m.scale = MathUtils.randomBoolean() ? 1f : 1.5f;
+                particles.add(m);
+            }
+        }
+
         if (waterRemindLeft > 0f) {
             remindDropIn -= dt;
             if (remindDropIn <= 0f) {
@@ -846,7 +885,7 @@ public class CatApp extends ApplicationAdapter {
         }
 
         if (!sleeping && idleTime > 60f && !dragging && !petActive
-                && wanderState == 0 && typingLeft <= 0f) {
+                && wanderState == 0 && typingLeft <= 0f && !musicOn) {
             sleeping = true;
         }
         if (sleeping) {
@@ -990,7 +1029,8 @@ public class CatApp extends ApplicationAdapter {
     private void updateTail(float dt) {
         float interval = sleeping ? 0.8f
                 : (alertLeft > 0f ? 0.12f
-                : (wanderState == 2 || wanderState == 3 ? 0.15f : 0.3f));
+                : (wanderState == 2 || wanderState == 3 ? 0.15f
+                : (danceNow ? 0.18f : 0.3f)));
         tailTime += dt;
         if (tailTime >= interval) {
             tailTime = 0f;
@@ -1131,6 +1171,11 @@ public class CatApp extends ApplicationAdapter {
             if (facingLeft) {
                 scaleX = -scaleX;
             }
+        } else if (danceNow) {
+            // groove scaled by how loud the music actually is
+            float amp = 0.3f + 0.7f * musicAmp;
+            bob = Math.abs(MathUtils.sin(time * 7f)) * 1.2f * amp;
+            waddle = MathUtils.sin(time * 7f) * 3.5f * amp;
         }
         batch.draw(fboRegion, CAT_X, bob, FBO_W / 2f, 0,
                 FBO_W, FBO_H, scaleX, scaleY, waddle);
@@ -1170,6 +1215,7 @@ public class CatApp extends ApplicationAdapter {
 
     @Override
     public void dispose() {
+        SystemAudio.stop();
         try {
             GlobalScreen.unregisterNativeHook();
         } catch (Throwable ignored) {
@@ -1192,6 +1238,7 @@ public class CatApp extends ApplicationAdapter {
         sparkTex.dispose();
         pawTex.dispose();
         waterDropTex.dispose();
+        noteTex.dispose();
         px.dispose();
     }
 }
