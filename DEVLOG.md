@@ -163,6 +163,18 @@ art, Squirtle first.
   user-visible update check/download. Still no telemetry — nothing is sent.
 - First packaged release: **v1.0.0** on the repo's releases page.
 
+## 14. Windows executable
+
+- Downloaded Temurin JDK 21 (to `~/.jdks`) purely as a packaging toolchain —
+  the app still targets Java 8.
+- `jpackage --type app-image` wraps the fat jar into
+  `build/dist/DeskCat/DeskCat.exe` with a trimmed, bundled Java 21 runtime:
+  double-click to run, no Java required on the machine.
+- `DeskCat-1.0.0-win64.zip` (~67 MB) uploaded to the v1.0.0 release
+  alongside the jar; README documents both install flavors.
+- The auto-updater still functions inside the app image (it swaps the jar
+  under `app/`), provided the folder sits somewhere user-writable.
+
 ## Current state
 
 - **Skins**: Squirtle (default, procedural), Pikachu (character maps), and

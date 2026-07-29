@@ -49,6 +49,15 @@ Key mechanics that span the codebase:
   [build.gradle](build.gradle) together, run `gradle fatJar`, then
   `gh release create vX.Y.Z build/libs/deskcat-X.Y.Z.jar`. The updater
   compares `tag_name` against `CatApp.VERSION` and installs the first `.jar`
-  asset. Run packaged builds with JRE 8u491+ — the 2016 JDK 8 truststore may
+  asset. Run jar builds with JRE 8u491+ — the 2016 JDK 8 truststore may
   fail TLS to GitHub, which degrades the updater silently.
+- Windows exe: `jpackage --type app-image --name DeskCat --input build/libs
+  --main-jar deskcat-X.Y.Z.jar --dest build/dist --app-version X.Y.Z
+  --vendor Rohits1402`, then zip `build/dist/DeskCat` as
+  `DeskCat-X.Y.Z-win64.zip` and upload it to the release alongside the jar.
+  jpackage lives in the Temurin 21 install at `~/.jdks/jdk-21*` (the app
+  still compiles for Java 8; the exe bundles the 21 runtime). The
+  auto-updater works inside the app image too — it swaps `app/*.jar` in
+  place — but only when the unzipped folder is user-writable. The packaged
+  exe must be closed before zipping; the launcher locks its own jar.
 - [DEVLOG.md](DEVLOG.md) is the project history and backlog; append to it when making significant changes.

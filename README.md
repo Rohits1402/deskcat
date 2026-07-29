@@ -56,8 +56,14 @@ Right-click the tray icon (yellow bolt) to switch skins on the fly
 ## Installing and updates
 
 Packaged builds live on the
-[releases page](https://github.com/Rohits1402/deskcat/releases) as a single
-runnable jar:
+[releases page](https://github.com/Rohits1402/deskcat/releases) in two
+flavors:
+
+- **`DeskCat-x.y.z-win64.zip`** — unzip anywhere and double-click
+  `DeskCat.exe`. A trimmed Java runtime is bundled inside; nothing needs to
+  be installed.
+- **`deskcat-x.y.z.jar`** — single runnable jar for machines that already
+  have Java 8+:
 
 ```
 java -jar deskcat-1.0.0.jar
