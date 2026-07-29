@@ -6,6 +6,10 @@ plugins {
 sourceCompatibility = JavaVersion.VERSION_1_8
 targetCompatibility = JavaVersion.VERSION_1_8
 
+tasks.withType(JavaCompile) {
+    options.encoding = 'UTF-8'
+}
+
 repositories {
     mavenCentral()
 }
@@ -19,12 +23,26 @@ dependencies {
     implementation "com.badlogicgames.gdx:gdx-backend-lwjgl3:$gdxVersion"
     implementation "com.badlogicgames.gdx:gdx-platform:$gdxVersion:natives-desktop"
     implementation "com.github.kwhat:jnativehook:2.2.2"
+    testImplementation "junit:junit:4.13.2"
 }
 
 application {
     mainClass = 'com.deskcat.DesktopLauncher'
+    // small heap + serial GC: the app state is tiny, textures live on the GPU
+    applicationDefaultJvmArgs = [
+            '-Xms16m', '-Xmx48m',
+            '-XX:MaxMetaspaceSize=64m',
+            '-XX:+UseSerialGC',
+    ]
 }
 
+test {
+    useJUnit()
+}
+
+// double-clickable everything-included jar:
+// java -jar deskcat-X.Y.Z.jar [skin] [name]
+// version must stay in sync with CatApp.VERSION (release process in CLAUDE.md)
 tasks.register('fatJar', Jar) {
     archiveBaseName = 'deskcat'
     archiveVersion = '1.0.0'

@@ -147,7 +147,60 @@ art, Squirtle first.
   the tray tooltip shows the active skin.
 - `.gitignore` extended with IntelliJ artifacts (`.idea/`, `local.properties`).
 
-## 13. Packaging and auto-updater
+## 13. LAN presence, chat, size control, tests (`feature/lan-presence`)
+
+Built on a feature branch; settings window and auto-updater are being built
+separately by another dev — the LAN work reads the launch args for now
+(`java -jar deskcat.jar <skin> <name>`).
+
+- **LAN presence**: UDP multicast (`239.42.10.7:42107`), pipe-delimited
+  escaped wire format (`LanProtocol`), 5 Hz state broadcasts (skin, position
+  as work-area fractions, facing, idle/walk/sleep/drag), 10 s peer timeout,
+  BYE on exit. Everything rides the one multicast group; DMs are filtered by
+  target id on the receiving side.
+- **Remote pet windows**: one small transparent always-on-top window per
+  peer (`RemotePetsManager` / `RemotePetWindow`), same size as the local pet,
+  no taskbar button, name label above the head, walk bob + facing mirror +
+  blink, position eased between 5 Hz updates. Textures come from the shared
+  `SkinAssets` cache (per-skin, disposed once at shutdown) — `applySkin()`
+  no longer disposes on swap since remote pets may use the same skin.
+- **Chat**: middle-click (or right-click → *Say…*) opens a small dark text
+  field; Enter broadcasts, `@name message` DMs. Pixel speech bubbles with
+  outline, tail nub, ellipsis truncation and fade render above the pet on
+  every desktop. Bubble timing lives in a pure `Bubble` class shared by the
+  local pet and peers.
+- **Right-click menus** (`PetMenu`, Swing popup on an invisible anchor):
+  own pet — Say… / Dismiss bubble / Hide behind taskbar / Quit (when no
+  tray); remote pet — Message them… / Dismiss bubble. Remote windows accept
+  clicks now (click-through was dropped for this).
+- **Hide behind taskbar**: drops always-on-top and tucks the window into the
+  taskbar area with the ears peeking out; clicking the peek or the menu
+  brings it back to its old spot.
+- **Size control**: `scale` (px per world unit) is adjustable from the
+  tray's *Size* submenu (Small 3 — default, Normal 5, Large 7); the window,
+  input math, bubble camera and all remote windows resize live. *Taskbar
+  gap* submenu adds patrol clearance (Auto = screen insets, which already
+  detect the taskbar; manual px for auto-hide setups).
+- **Footprint**: `fatJar` task (everything-included ~14 MB jar) + tuned JVM
+  defaults (`-Xms16m -Xmx48m -XX:+UseSerialGC`, metaspace cap) — two
+  instances ran at ~150 MB working set each, no Gradle daemons.
+- **Tests**: JUnit 4 wired in (`gradle test`, 26 tests): protocol round-trip
+  /escaping/garbage rejection, peer registry add/update/prune/BYE/DM
+  filtering, spring physics (extracted `Spring` class now drives the squash),
+  bubble timing/fade, ellipsis fitting (measurer injected so no GL needed).
+  Compile encoding pinned to UTF-8 (the `…` literal broke under Cp1252).
+- Verified live: two instances (Squirtle "Rajat" + Pikachu "Dev2") found
+  each other over multicast, remote windows rendered transparent with name
+  labels.
+- Post-testing fixes: chat input and pet menus moved to undecorated utility
+  JFrames (ownerless JWindows can't take focus on Windows — typing and menu
+  clicks were dead), remote windows turn click-through while overlapping the
+  local pet so it stays draggable, same-machine peers are detected by source
+  address and get no mirror window (no more duplicate pets when testing two
+  instances on one PC), pose sync raised 5 Hz → 60 Hz, hide-behind-taskbar
+  peek enlarged. 27 tests.
+
+## 14. Packaging and auto-updater
 
 - Added `fatJar` Gradle task producing a single runnable
   `deskcat-X.Y.Z.jar` (all deps + LWJGL natives merged), and
@@ -162,6 +215,9 @@ art, Squirtle first.
 - This carves the one sanctioned exception into the no-network rule: the
   user-visible update check/download. Still no telemetry — nothing is sent.
 - First packaged release: **v1.0.0** on the repo's releases page.
+- Merge note: the LAN branch and this work both added a `fatJar` task —
+  unified into one (versioned name + `Implementation-Version` from main,
+  tuned JVM defaults and UTF-8 compile encoding from the branch).
 
 ## 14. Windows executable
 
@@ -214,7 +270,10 @@ art, Squirtle first.
 - **Behaviors**: eye tracking, blink, tail animation, mochi drag, petting
   hearts, keyboard kneading, startle, click attacks (water gun /
   thunderbolt / startle), endless bottom-edge patrol with return-home, sleep,
-  tray menu (skin switcher + quit), no taskbar button.
+  tray menu (skin switcher + size + taskbar gap + quit), no taskbar button.
+- **LAN** (branch `feature/lan-presence`): peer discovery, remote pet
+  windows with names, broadcast + DM chat with bubbles, right-click menus,
+  hide-behind-taskbar, size control, unit tests, fat jar.
 - **Repo**: public at
   [github.com/Rohits1402/deskcat](https://github.com/Rohits1402/deskcat);
   collaborators: Rohits1402 (owner), Rajat Gurnani (write).
