@@ -57,7 +57,8 @@ Key mechanics that span the codebase:
   helper dies with the app (dispose calls stop; a broken stdout pipe ends
   it if the JVM is hard-killed).
 - Releases: bump `CatApp.VERSION` and the `fatJar` version in
-  [build.gradle](build.gradle) together, run `gradle fatJar`, then
+  [build.gradle](build.gradle) together, move the "Unreleased" entries in
+  `PatchNotes.NOTES` under the new version heading, run `gradle fatJar`, then
   `gh release create vX.Y.Z build/libs/deskcat-X.Y.Z.jar`. The updater
   compares `tag_name` against `CatApp.VERSION` and installs the first `.jar`
   asset. Run jar builds with JRE 8u491+ — the 2016 JDK 8 truststore may

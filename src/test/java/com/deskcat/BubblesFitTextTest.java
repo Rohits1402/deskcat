@@ -33,4 +33,48 @@ public class BubblesFitTextTest {
         assertEquals("…", Bubbles.fitText(MONO, "hello", 7f));
         assertEquals("…", Bubbles.fitText(MONO, "hello", 0f));
     }
+
+    @Test
+    public void wrapShortTextSingleLine() {
+        assertEquals(java.util.Arrays.asList("hi there"),
+                Bubbles.wrap(MONO, "hi there", 100f, 4));
+    }
+
+    @Test
+    public void wrapBreaksAtWordsAndEveryLineFits() {
+        java.util.List<String> lines =
+                Bubbles.wrap(MONO, "the quick brown fox jumps over", 80f, 4);
+        assertTrue(lines.size() > 1);
+        for (String line : lines) {
+            assertTrue(MONO.width(line) <= 80f);
+        }
+        assertEquals("the quick brown fox jumps over",
+                String.join(" ", lines));
+    }
+
+    @Test
+    public void wrapHardSplitsOversizedWords() {
+        java.util.List<String> lines =
+                Bubbles.wrap(MONO, "abcdefghijklmnop", 35f, 4);
+        assertTrue(lines.size() > 1);
+        for (String line : lines) {
+            assertTrue(MONO.width(line) <= 35f);
+        }
+        assertEquals("abcdefghijklmnop", String.join("", lines));
+    }
+
+    @Test
+    public void wrapCapsLinesWithEllipsis() {
+        java.util.List<String> lines = Bubbles.wrap(MONO,
+                "one two three four five six seven eight nine ten", 35f, 3);
+        assertEquals(3, lines.size());
+        assertTrue(lines.get(2).endsWith("…"));
+        assertTrue(MONO.width(lines.get(2)) <= 35f);
+    }
+
+    @Test
+    public void wrapEmptyTextGivesOneEmptyLine() {
+        assertEquals(java.util.Arrays.asList(""),
+                Bubbles.wrap(MONO, "", 35f, 4));
+    }
 }

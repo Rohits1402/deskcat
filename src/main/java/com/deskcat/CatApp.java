@@ -99,6 +99,9 @@ public class CatApp extends ApplicationAdapter {
     /** Live main-window position, read by remote windows for overlap checks. */
     public static volatile int mainWinX, mainWinY;
 
+    /** Opacity of remote peers' pets (tray → Peer fade). */
+    public static volatile float peerAlpha = 0.9f;
+
     // per-skin geometry and style, set in create()
     private int tailX;
     private int eyeLX, eyeRX, eyeW, eyeH, eyeY, eyeStyle;
@@ -198,7 +201,7 @@ public class CatApp extends ApplicationAdapter {
     private int wanderState;
     private float wanderIn = 25f;
     private float fallVy, winXf;
-    private int floorY, walkTargetX;
+    private int floorY, patrolDir;
     private int homeX, homeY, patrolMinX, patrolMaxX;
     private float returnT, leapFromY;
     private boolean facingLeft;
@@ -214,6 +217,15 @@ public class CatApp extends ApplicationAdapter {
     private OrthographicCamera pxCam;
     private float stateTick;
     private final Bubble ownBubble = new Bubble();
+    private long ownBubbleSpawned;
+    /** Countdown until an incoming pellet lands and we flinch. */
+    private float pendingShotIn = -1f;
+    private int pendingShotDir = 1;
+
+    // knocked out by a shot: squish flat or fall over 90°, then get back up
+    private static final float KO_TOTAL = 1.6f;
+    private float koT;
+    private int koMode, koDir = 1;
 
     // tucked behind the taskbar via the right-click menu
     private boolean hidden;
@@ -260,7 +272,8 @@ public class CatApp extends ApplicationAdapter {
 
         peerReg = new PeerRegistry(selfId);
         remoteMgr = new RemotePetsManager((Lwjgl3Application) Gdx.app, font, px,
-                (peer, text) -> doSendChat(text, peer.id));
+                (peer, text) -> doSendChat(text, peer.id),
+                peer -> shoot(peer.id));
         lan = new LanClient(selfId);
         lan.start();   // failure is silent; the pet just stays solo
 
@@ -273,6 +286,21 @@ public class CatApp extends ApplicationAdapter {
         }, "deskcat-update-boot");
         boot.setDaemon(true);
         boot.start();
+
+        // test hook: DESKCAT_TEST_CHAT="/size 1000 hi" auto-sends a chat
+        // message shortly after launch (drives bubble rendering in CI/dev)
+        String testChat = System.getenv("DESKCAT_TEST_CHAT");
+        if (testChat != null && !testChat.isEmpty()) {
+            Thread t = new Thread(() -> {
+                try {
+                    Thread.sleep(2500);
+                } catch (InterruptedException ignored) {
+                }
+                Gdx.app.postRunnable(() -> sendChat(testChat));
+            }, "deskcat-test-chat");
+            t.setDaemon(true);
+            t.start();
+        }
 
         Gdx.input.setInputProcessor(new InputAdapter() {
             @Override
@@ -359,6 +387,12 @@ public class CatApp extends ApplicationAdapter {
         }
         items.add(new PetMenu.Item(hidden ? "Come out" : "Hide behind taskbar",
                 () -> Gdx.app.postRunnable(this::toggleHidden)));
+        for (Peer peer : peerReg.peers()) {
+            final String pid = peer.id;
+            String pname = peer.name == null || peer.name.isEmpty() ? "?" : peer.name;
+            items.add(new PetMenu.Item("Shoot " + pname,
+                    () -> Gdx.app.postRunnable(() -> shoot(pid))));
+        }
         if (!trayOk) {
             items.add(new PetMenu.Item("Quit DeskCat", () ->
                     Gdx.app.postRunnable(() -> Gdx.app.exit())));
@@ -405,9 +439,21 @@ public class CatApp extends ApplicationAdapter {
         long now = System.currentTimeMillis();
         for (com.deskcat.net.LanMsg m = lan.poll(); m != null; m = lan.poll()) {
             peerReg.onMessage(m, now);
+            if (m.type == LanMsg.ACTION && "shoot".equals(m.action)
+                    && (m.target == null || m.target.isEmpty()
+                            || m.target.equals(selfId))) {
+                incomingShot(m.id);
+            }
         }
         peerReg.prune(now);
         remoteMgr.sync(peerReg.peers());
+
+        if (pendingShotIn > 0f) {
+            pendingShotIn -= dt;
+            if (pendingShotIn <= 0f) {
+                reactToShot();
+            }
+        }
 
         stateTick -= dt;
         if (stateTick <= 0f) {
@@ -417,7 +463,8 @@ public class CatApp extends ApplicationAdapter {
                     / (float) Math.max(1, ub.width - winW());
             float yf = (window.getPositionY() - ub.y)
                     / (float) Math.max(1, ub.height - winH());
-            int anim = dragging ? LanMsg.ANIM_DRAG
+            int anim = koT > 0f ? LanMsg.ANIM_KO
+                    : dragging ? LanMsg.ANIM_DRAG
                     : sleeping ? LanMsg.ANIM_SLEEP
                     : (wanderState == 2 || wanderState == 3) ? LanMsg.ANIM_WALK
                     : LanMsg.ANIM_IDLE;
@@ -433,7 +480,8 @@ public class CatApp extends ApplicationAdapter {
 
     /**
      * Called on the render thread with what the user typed. "@name message"
-     * DMs the peer with that display name; anything else broadcasts.
+     * DMs the peer with that display name; "/shoot" shoots; other /commands
+     * style the bubble (see ChatCommands).
      */
     private void sendChat(String raw) {
         String text = raw;
@@ -453,12 +501,70 @@ public class CatApp extends ApplicationAdapter {
 
     /** targetId null → broadcast; otherwise a DM to that peer. */
     private void doSendChat(String text, String targetId) {
-        if (text.isEmpty()) {
+        if (text.trim().toLowerCase().startsWith("/shoot")) {
+            shoot(targetId);
             return;
         }
-        lan.send(LanProtocol.encodeChat(selfId, userName, text, targetId));
-        ownBubble.show(text, System.currentTimeMillis());
+        ChatCommands.Parsed p = ChatCommands.parse(text);
+        if (p.text.isEmpty()) {
+            return;
+        }
+        lan.send(LanProtocol.encodeChat(selfId, userName, p.text, targetId,
+                p.scale, p.effect, p.colorHex));
+        ownBubble.show(p.text, System.currentTimeMillis(),
+                p.scale, p.effect, p.colorHex);
         wake();
+    }
+
+    /** Fire at one peer (or everyone when targetId is null). */
+    private void shoot(String targetId) {
+        lan.send(LanProtocol.encodeAction(selfId, userName, "shoot", targetId));
+        attack();   // our pet plays its signature attack as the muzzle flash
+        float fromX = window.getPositionX() + winW() / 2f;
+        float fromY = window.getPositionY() + winH() / 2f;
+        for (Peer p : peerReg.peers()) {
+            if (targetId == null || targetId.equals(p.id)) {
+                ProjectileFx.fire((Lwjgl3Application) Gdx.app, fromX, fromY,
+                        peerCenterX(p), peerCenterY(p));
+            }
+        }
+        wake();
+    }
+
+    private float peerCenterX(Peer p) {
+        Rectangle ub = remoteMgr.usable();
+        return ub.x + p.xFrac * Math.max(1, ub.width - winW()) + winW() / 2f;
+    }
+
+    private float peerCenterY(Peer p) {
+        Rectangle ub = remoteMgr.usable();
+        return ub.y + p.yFrac * Math.max(1, ub.height - winH()) + winH() / 2f;
+    }
+
+    /** Someone shot us: incoming pellet, then flinch on impact. */
+    private void incomingShot(String shooterId) {
+        Peer shooter = peerReg.byId(shooterId);
+        float toX = window.getPositionX() + winW() / 2f;
+        float toY = window.getPositionY() + winH() / 2f;
+        if (shooter != null) {
+            float fromX = peerCenterX(shooter), fromY = peerCenterY(shooter);
+            ProjectileFx.fire((Lwjgl3Application) Gdx.app, fromX, fromY, toX, toY);
+            pendingShotIn = ProjectileFx.duration(fromX, fromY, toX, toY);
+            pendingShotDir = fromX < toX ? -1 : 1;   // fall away from the shot
+        } else {
+            pendingShotDir = MathUtils.randomBoolean() ? -1 : 1;
+            reactToShot();   // unknown shooter: no pellet, just the hit
+        }
+    }
+
+    private void reactToShot() {
+        wake();
+        alertLeft = 1.2f;
+        koT = KO_TOTAL;
+        koMode = MathUtils.randomBoolean() ? 0 : 1;   // fall over / squish flat
+        koDir = pendingShotDir;
+        squash.kick(-6f);
+        sparkBurst(CAT_X + eyeCenterX, 18f, 12, sparkTex, 16f, 4f, 12f);
     }
 
     /** Resize the pet (and the chat/bubble camera); remote windows follow. */
@@ -529,9 +635,20 @@ public class CatApp extends ApplicationAdapter {
 
     private static final String[] SKINS = {"squirtle", "pikachu", "cat"};
 
+    // one tray icon per machine: the first instance binds this loopback port
+    // and owns the tray; later instances quit via the pet's right-click menu
+    private java.net.ServerSocket trayLock;
+
     private void setupTray() {
         try {
             if (!SystemTray.isSupported()) {
+                return;
+            }
+            try {
+                trayLock = new java.net.ServerSocket(42108, 1,
+                        java.net.InetAddress.getByName("127.0.0.1"));
+            } catch (Throwable taken) {
+                trayOk = false;   // another instance already shows the tray
                 return;
             }
             PopupMenu menu = new PopupMenu();
@@ -591,6 +708,25 @@ public class CatApp extends ApplicationAdapter {
             }
             menu.add(gapMenu);
 
+            // how transparent other people's pets render
+            Menu fadeMenu = new Menu("Peer fade");
+            String[] fadeNames = {"Off", "Light", "Heavy"};
+            float[] fadeVals = {1f, 0.9f, 0.55f};
+            final CheckboxMenuItem[] fadeItems = new CheckboxMenuItem[fadeVals.length];
+            for (int i = 0; i < fadeVals.length; i++) {
+                final int idx = i;
+                fadeItems[i] = new CheckboxMenuItem(fadeNames[i],
+                        Math.abs(fadeVals[i] - peerAlpha) < 0.01f);
+                fadeItems[i].addItemListener(e -> {
+                    for (int j = 0; j < fadeItems.length; j++) {
+                        fadeItems[j].setState(j == idx);
+                    }
+                    peerAlpha = fadeVals[idx];
+                });
+                fadeMenu.add(fadeItems[i]);
+            }
+            menu.add(fadeMenu);
+
             Menu remindMenu = new Menu("Reminders");
             final CheckboxMenuItem stretchItem =
                     new CheckboxMenuItem("Stretch every 30 min", false);
@@ -624,6 +760,10 @@ public class CatApp extends ApplicationAdapter {
             updateItem = new MenuItem("Check for updates");
             updateItem.addActionListener(e -> installOrCheck());
             menu.add(updateItem);
+
+            MenuItem notesItem = new MenuItem("Patch notes");
+            notesItem.addActionListener(e -> PatchNotes.show());
+            menu.add(notesItem);
             menu.addSeparator();
 
             MenuItem exit = new MenuItem("Quit DeskCat");
@@ -911,6 +1051,7 @@ public class CatApp extends ApplicationAdapter {
         boltLeft -= dt;
         waterLeft -= dt;
         typingLeft -= dt;
+        koT -= dt;
         stretchLeft -= dt;
         waterRemindLeft -= dt;
 
@@ -1094,15 +1235,15 @@ public class CatApp extends ApplicationAdapter {
             }
             window.setPosition(window.getPositionX(), Math.round(ny));
         } else if (wanderState == 2) {
-            float dir = walkTargetX < winXf ? -1f : 1f;
-            facingLeft = dir < 0f;
-            winXf += dir * 85f * dt;
-            window.setPosition(Math.round(winXf), floorY);
-            if (Math.abs(winXf - walkTargetX) < 4f) {
-                // turn around at the screen edge and keep patrolling
-                walkTargetX = walkTargetX <= patrolMinX + 4
-                        ? patrolMaxX : patrolMinX;
+            facingLeft = patrolDir < 0;
+            winXf += patrolDir * 85f * dt;
+            // wraparound: walk fully off one edge, reappear at the other
+            if (patrolDir > 0 && winXf > patrolMaxX) {
+                winXf = patrolMinX - winW();
+            } else if (patrolDir < 0 && winXf + winW() < patrolMinX) {
+                winXf = patrolMaxX;
             }
+            window.setPosition(Math.round(winXf), floorY);
         } else if (wanderState == 3) {
             float dir = homeX < winXf ? -1f : 1f;
             facingLeft = dir < 0f;
@@ -1142,11 +1283,13 @@ public class CatApp extends ApplicationAdapter {
             floorY = b.y + b.height - ins.bottom - winH() - Math.max(0, bottomGap);
             homeX = window.getPositionX();
             homeY = window.getPositionY();
-            patrolMinX = b.x + 10;
-            patrolMaxX = b.x + b.width - winW() - 10;
-            walkTargetX = MathUtils.randomBoolean() ? patrolMinX : patrolMaxX;
+            // wrap bounds: full screen edges, so the pet leaves completely
+            // before reappearing on the far side
+            patrolMinX = b.x;
+            patrolMaxX = b.x + b.width;
+            patrolDir = MathUtils.randomBoolean() ? -1 : 1;
             winXf = homeX;
-            facingLeft = walkTargetX < winXf;
+            facingLeft = patrolDir < 0;
             fallVy = 0f;
             if (homeY < floorY - 4) {
                 wanderState = 1;
@@ -1335,8 +1478,36 @@ public class CatApp extends ApplicationAdapter {
             bob = Math.abs(MathUtils.sin(time * 7f)) * 1.2f * amp;
             waddle = MathUtils.sin(time * 7f) * 3.5f * amp;
         }
+
+        // knocked out by a shot: fall over 90° or squish flat, then recover
+        float drawScaleY = scaleY;
+        if (koT > 0f) {
+            float e = KO_TOTAL - koT;
+            if (koMode == 0) {
+                float rot;
+                if (e < 0.25f) {
+                    rot = 90f * (e / 0.25f);              // topple
+                } else if (e < 1.1f) {
+                    rot = 90f;                            // lie there
+                } else {
+                    rot = 90f * (1f - (e - 1.1f) / 0.5f); // get back up
+                }
+                waddle += rot * koDir;
+            } else {
+                float squish;
+                if (e < 0.15f) {
+                    squish = 1f - 0.75f * (e / 0.15f);    // flatten
+                } else if (e < 1.0f) {
+                    squish = 0.25f;                       // pancake
+                } else {
+                    squish = 0.25f + 0.75f * Math.min(1f, (e - 1.0f) / 0.6f);
+                }
+                drawScaleY *= squish;
+                scaleX *= 1f + (1f - squish) * 0.6f;      // spread sideways
+            }
+        }
         batch.draw(fboRegion, CAT_X, bob, FBO_W / 2f, 0,
-                FBO_W, FBO_H, scaleX, scaleY, waddle);
+                FBO_W, FBO_H, scaleX, drawScaleY, waddle);
 
         if (boltLeft > 0f && MathUtils.sin(time * 55f) > -0.4f) {
             float a = MathUtils.clamp(boltLeft / 0.3f, 0f, 1f);
@@ -1372,11 +1543,21 @@ public class CatApp extends ApplicationAdapter {
 
         long nowMs = System.currentTimeMillis();
         if (ownBubble.isActive(nowMs)) {
-            batch.setProjectionMatrix(pxCam.combined);
-            batch.begin();
-            Bubbles.draw(batch, font, px, ownBubble.text(),
-                    ownBubble.alpha(nowMs), winW(), winH() - 4);
-            batch.end();
+            if (Bubbles.fits(font, ownBubble.text(), ownBubble.scale(),
+                    winW(), winH() - 4)) {
+                batch.setProjectionMatrix(pxCam.combined);
+                batch.begin();
+                Bubbles.draw(batch, font, px, ownBubble.text(),
+                        ownBubble.alpha(nowMs), winW(), winH() - 4,
+                        ownBubble.scale(), ownBubble.effect(),
+                        ownBubble.colorHex(), time);
+                batch.end();
+            } else if (ownBubbleSpawned != ownBubble.untilMs()) {
+                // too big for the pet window: overlay window, sized to screen
+                ownBubbleSpawned = ownBubble.untilMs();
+                BubbleFx.spawn((Lwjgl3Application) Gdx.app, font, ownBubble,
+                        () -> new float[] {mainWinX + winW() / 2f, mainWinY});
+            }
         }
     }
 
@@ -1384,6 +1565,12 @@ public class CatApp extends ApplicationAdapter {
     public void dispose() {
         if (lan != null) {
             lan.close();
+        }
+        if (trayLock != null) {
+            try {
+                trayLock.close();
+            } catch (Throwable ignored) {
+            }
         }
         SystemAudio.stop();
         try {
@@ -1399,6 +1586,7 @@ public class CatApp extends ApplicationAdapter {
         batch.dispose();
         fbo.dispose();
         font.dispose();
+        Fonts.disposeAll();
         SkinAssets.disposeAll();
         heartTex.dispose();
         zzzTex.dispose();

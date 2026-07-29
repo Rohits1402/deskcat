@@ -1,5 +1,8 @@
 package com.deskcat;
 
+import java.util.ArrayList;
+import java.util.List;
+
 import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.graphics.Texture;
 import com.badlogic.gdx.graphics.g2d.BitmapFont;
@@ -8,14 +11,17 @@ import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 
 /**
  * Pixel-style speech bubble drawn in window-pixel coordinates at the top of a
- * pet window. Shared by the local pet and remote-peer windows.
+ * pet window. Shared by the local pet and remote-peer windows. Text wraps
+ * onto up to {@link #MAX_LINES} lines; only past that does it get an ellipsis.
  */
 public final class Bubbles {
+
+    static final int MAX_LINES = 4;
 
     private static final Color C_OUTLINE = Color.valueOf("26202A");
     private static final GlyphLayout LAYOUT = new GlyphLayout();
 
-    /** Text-width oracle, injectable so fitting is testable without GL. */
+    /** Text-width oracle, injectable so wrapping is testable without GL. */
     public interface Measurer {
         float width(String s);
     }
@@ -23,48 +29,189 @@ public final class Bubbles {
     private Bubbles() {
     }
 
-    /**
-     * @param alpha 0..1 fade
-     * @param winW  window width in pixels; the bubble is centered and clamped
-     */
+    /** Back-compat: unstyled bubble. */
     public static void draw(SpriteBatch batch, BitmapFont font, Texture px,
             String text, float alpha, int winW, float topY) {
-        String shown = fitText(font, text, winW - 28);
-        LAYOUT.setText(font, shown);
-        float tw = LAYOUT.width, th = LAYOUT.height;
-        float bw = tw + 14, bh = th + 12;
-        float bx = (winW - bw) / 2f;
-        float by = topY - bh;
-
-        batch.setColor(1f, 1f, 1f, 0.95f * alpha);
-        batch.draw(px, bx, by, bw, bh);
-        batch.setColor(C_OUTLINE.r, C_OUTLINE.g, C_OUTLINE.b, alpha);
-        batch.draw(px, bx, by - 1, bw, 1);
-        batch.draw(px, bx, by + bh, bw, 1);
-        batch.draw(px, bx - 1, by, 1, bh);
-        batch.draw(px, bx + bw, by, 1, bh);
-        // tail nub pointing down at the pet
-        batch.setColor(1f, 1f, 1f, 0.95f * alpha);
-        batch.draw(px, winW / 2f - 3, by - 4, 6, 4);
-        batch.setColor(C_OUTLINE.r, C_OUTLINE.g, C_OUTLINE.b, alpha);
-        batch.draw(px, winW / 2f - 4, by - 4, 1, 4);
-        batch.draw(px, winW / 2f + 3, by - 4, 1, 4);
-        batch.draw(px, winW / 2f - 3, by - 5, 6, 1);
-
-        font.setColor(C_OUTLINE.r, C_OUTLINE.g, C_OUTLINE.b, alpha);
-        font.draw(batch, shown, bx + 7, by + bh - 5);
-        font.setColor(Color.WHITE);
-        batch.setColor(Color.WHITE);
+        draw(batch, font, px, text, alpha, winW, topY, 1f,
+                ChatCommands.EFFECT_NONE, "", 0f);
     }
 
-    private static String fitText(BitmapFont font, String text, float maxW) {
-        return fitText(s -> {
+    /**
+     * @param alpha    0..1 fade
+     * @param winW     window width in pixels; the bubble is centered/clamped
+     * @param scale    text scale from chat commands (/big, /size N …)
+     * @param effect   ChatCommands.EFFECT_* (shake, rainbow)
+     * @param colorHex RRGGBB text color, "" for the default
+     * @param time     caller's animation clock, drives shake/rainbow
+     */
+    public static void draw(SpriteBatch batch, BitmapFont font, Texture px,
+            String text, float alpha, int winW, float topY, float scale,
+            int effect, String colorHex, float time) {
+        Measurer m = s -> {
             LAYOUT.setText(font, s);
             return LAYOUT.width;
-        }, text, maxW);
+        };
+        float maxTextW = winW - 28;
+        // the bubble can never leave the pet window: shrink the requested
+        // scale until the longest word fits a line and the bubble fits the
+        // space above the pet (a huge /size on a Small pet degrades gracefully)
+        float eff = Math.max(1f, scale);
+        List<String> lines;
+        float lineH, tw;
+        while (true) {
+            font.getData().setScale(eff);
+            int maxLines = eff >= 2f ? 2 : (eff > 1.2f ? 3 : MAX_LINES);
+            lines = wrap(m, text, maxTextW, maxLines);
+            lineH = font.getLineHeight();
+            tw = 0;
+            float widestWord = 0;
+            for (String word : text.trim().split("\\s+")) {
+                widestWord = Math.max(widestWord, m.width(word));
+            }
+            for (String line : lines) {
+                tw = Math.max(tw, m.width(line));
+            }
+            boolean fits = widestWord <= maxTextW
+                    && lines.size() * lineH + 10 <= topY;
+            if (fits || eff <= Math.min(1f, scale) + 0.01f) {
+                break;
+            }
+            eff = Math.max(Math.min(1f, scale), eff * 0.85f);
+        }
+        if (scale < 1f) {
+            // shrinking commands are honored as-is
+            font.getData().setScale(scale);
+            int maxLines = MAX_LINES;
+            lines = wrap(m, text, maxTextW, maxLines);
+            lineH = font.getLineHeight();
+            tw = 0;
+            for (String line : lines) {
+                tw = Math.max(tw, m.width(line));
+            }
+        }
+        try {
+            float bw = tw + 14, bh = lines.size() * lineH + 10;
+            float bx = (winW - bw) / 2f;
+            float by = topY - bh;
+
+            batch.setColor(1f, 1f, 1f, 0.95f * alpha);
+            batch.draw(px, bx, by, bw, bh);
+            batch.setColor(C_OUTLINE.r, C_OUTLINE.g, C_OUTLINE.b, alpha);
+            batch.draw(px, bx, by - 1, bw, 1);
+            batch.draw(px, bx, by + bh, bw, 1);
+            batch.draw(px, bx - 1, by, 1, bh);
+            batch.draw(px, bx + bw, by, 1, bh);
+            // tail nub pointing down at the pet
+            batch.setColor(1f, 1f, 1f, 0.95f * alpha);
+            batch.draw(px, winW / 2f - 3, by - 4, 6, 4);
+            batch.setColor(C_OUTLINE.r, C_OUTLINE.g, C_OUTLINE.b, alpha);
+            batch.draw(px, winW / 2f - 4, by - 4, 1, 4);
+            batch.draw(px, winW / 2f + 3, by - 4, 1, 4);
+            batch.draw(px, winW / 2f - 3, by - 5, 6, 1);
+
+            Color base = C_OUTLINE;
+            if (!colorHex.isEmpty()) {
+                try {
+                    base = Color.valueOf(colorHex);
+                } catch (Throwable ignored) {
+                    // bad hex from the wire: keep the default
+                }
+            }
+            for (int i = 0; i < lines.size(); i++) {
+                float dx = 0, dy = 0;
+                Color c = base;
+                if (effect == ChatCommands.EFFECT_SHAKE) {
+                    dx = (float) Math.sin(time * 45f + i * 1.7f) * 1.5f * scale;
+                    dy = (float) Math.cos(time * 38f + i * 2.3f) * 1.2f * scale;
+                } else if (effect == ChatCommands.EFFECT_RAINBOW) {
+                    c = TMP.fromHsv((time * 120f + i * 40f) % 360f, 0.8f, 0.85f);
+                }
+                font.setColor(c.r, c.g, c.b, alpha);
+                font.draw(batch, lines.get(i),
+                        bx + 7 + dx, by + bh - 4 - i * lineH + dy);
+            }
+            font.setColor(Color.WHITE);
+            batch.setColor(Color.WHITE);
+        } finally {
+            font.getData().setScale(1f);   // the font is shared — always restore
+        }
     }
 
-    /** Truncate with an ellipsis so the bubble always fits the window. */
+    private static final Color TMP = new Color();
+
+    /**
+     * Greedy word wrap. Words wider than a whole line are hard-split; text
+     * that would exceed maxLines is cut with an ellipsis on the last line.
+     */
+    static List<String> wrap(Measurer m, String text, float maxW, int maxLines) {
+        List<String> lines = new ArrayList<String>();
+        StringBuilder cur = new StringBuilder();
+        for (String word : text.trim().split("\\s+")) {
+            // hard-split words that could never fit on one line
+            while (m.width(word) > maxW && word.length() > 1) {
+                int cut = word.length() - 1;
+                while (cut > 1 && m.width(word.substring(0, cut)) > maxW) {
+                    cut--;
+                }
+                String head = word.substring(0, cut);
+                if (cur.length() > 0) {
+                    lines.add(cur.toString());
+                    cur.setLength(0);
+                }
+                lines.add(head);
+                word = word.substring(cut);
+            }
+            String candidate = cur.length() == 0 ? word : cur + " " + word;
+            if (m.width(candidate) <= maxW || cur.length() == 0) {
+                cur.setLength(0);
+                cur.append(candidate);
+            } else {
+                lines.add(cur.toString());
+                cur.setLength(0);
+                cur.append(word);
+            }
+        }
+        if (cur.length() > 0) {
+            lines.add(cur.toString());
+        }
+        if (lines.isEmpty()) {
+            lines.add("");
+        }
+        if (lines.size() > maxLines) {
+            String last = lines.get(maxLines - 1);
+            lines = new ArrayList<String>(lines.subList(0, maxLines));
+            lines.set(maxLines - 1, fitText(m, last + "…", maxW));
+        }
+        return lines;
+    }
+
+    /**
+     * Would this text at this scale fit inside a pet window? When not, the
+     * bubble escapes into its own overlay window (BubbleFx).
+     */
+    public static boolean fits(BitmapFont font, String text, float scale,
+            int winW, float topY) {
+        font.getData().setScale(Math.max(0.5f, scale));
+        try {
+            Measurer m = s -> {
+                LAYOUT.setText(font, s);
+                return LAYOUT.width;
+            };
+            float maxTextW = winW - 28;
+            float widestWord = 0;
+            for (String word : text.trim().split("\\s+")) {
+                widestWord = Math.max(widestWord, m.width(word));
+            }
+            int maxLines = scale >= 2f ? 2 : (scale > 1.2f ? 3 : MAX_LINES);
+            List<String> lines = wrap(m, text, maxTextW, maxLines);
+            return widestWord <= maxTextW
+                    && lines.size() * font.getLineHeight() + 10 <= topY;
+        } finally {
+            font.getData().setScale(1f);
+        }
+    }
+
+    /** Truncate with an ellipsis so a single line always fits. */
     static String fitText(Measurer m, String text, float maxW) {
         if (m.width(text) <= maxW) {
             return text;

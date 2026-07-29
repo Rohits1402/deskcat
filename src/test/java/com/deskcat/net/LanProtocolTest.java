@@ -47,6 +47,40 @@ public class LanProtocolTest {
     }
 
     @Test
+    public void chatStyleRoundTrip() {
+        LanMsg m = LanProtocol.decode(LanProtocol.encodeChat(
+                "id", "n", "hey", null, 2.5f, 1, "E5312E"));
+        assertNotNull(m);
+        assertEquals(2.5f, m.chatScale, 1e-6);
+        assertEquals(1, m.chatEffect);
+        assertEquals("E5312E", m.chatColor);
+    }
+
+    @Test
+    public void legacyChatWithoutStyleGetsDefaults() {
+        LanMsg m = LanProtocol.decode("DC1|C|id|n|hello|");
+        assertNotNull(m);
+        assertEquals(1f, m.chatScale, 1e-6);
+        assertEquals(0, m.chatEffect);
+        assertEquals("", m.chatColor);
+    }
+
+    @Test
+    public void actionRoundTrip() {
+        LanMsg m = LanProtocol.decode(LanProtocol.encodeAction(
+                "id-4", "Ana", "shoot", "id-9"));
+        assertNotNull(m);
+        assertEquals(LanMsg.ACTION, m.type);
+        assertEquals("shoot", m.action);
+        assertEquals("id-9", m.target);
+
+        LanMsg all = LanProtocol.decode(LanProtocol.encodeAction(
+                "id-4", "Ana", "shoot", null));
+        assertNotNull(all);
+        assertEquals("", all.target);
+    }
+
+    @Test
     public void byeRoundTrip() {
         LanMsg m = LanProtocol.decode(LanProtocol.encodeBye("id-3"));
         assertNotNull(m);

@@ -1,8 +1,8 @@
 package com.deskcat;
 
 /**
- * Timing/fade state of one speech bubble. Pure logic (time injected) shared
- * by the local pet and remote peers; rendering lives in {@link Bubbles}.
+ * Timing/fade/style state of one speech bubble. Pure logic (time injected)
+ * shared by the local pet and remote peers; rendering lives in {@link Bubbles}.
  */
 public class Bubble {
 
@@ -11,10 +11,21 @@ public class Bubble {
 
     private String text = "";
     private long untilMs;
+    private float scale = 1f;
+    private int effect;
+    private String colorHex = "";
 
     public void show(String text, long nowMs) {
+        show(text, nowMs, 1f, ChatCommands.EFFECT_NONE, "");
+    }
+
+    public void show(String text, long nowMs, float scale, int effect,
+            String colorHex) {
         this.text = text == null ? "" : text;
         this.untilMs = nowMs + DURATION_MS;
+        this.scale = ChatCommands.clampScale(scale);
+        this.effect = effect;
+        this.colorHex = colorHex == null ? "" : colorHex;
     }
 
     public boolean isActive(long nowMs) {
@@ -37,5 +48,22 @@ public class Bubble {
 
     public String text() {
         return text;
+    }
+
+    public float scale() {
+        return scale;
+    }
+
+    public int effect() {
+        return effect;
+    }
+
+    public String colorHex() {
+        return colorHex;
+    }
+
+    /** Expiry timestamp; doubles as an identity for the current message. */
+    public long untilMs() {
+        return untilMs;
     }
 }
