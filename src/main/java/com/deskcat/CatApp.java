@@ -17,7 +17,14 @@ import java.awt.TrayIcon;
 import java.awt.image.BufferedImage;
 import java.util.ArrayList;
 import java.util.Iterator;
+import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
+
+import com.deskcat.net.LanClient;
+import com.deskcat.net.LanMsg;
+import com.deskcat.net.LanProtocol;
+import com.deskcat.net.Peer;
+import com.deskcat.net.PeerRegistry;
 
 import com.github.kwhat.jnativehook.GlobalScreen;
 import com.github.kwhat.jnativehook.keyboard.NativeKeyEvent;
@@ -36,6 +43,8 @@ import com.badlogic.gdx.graphics.GL20;
 import com.badlogic.gdx.graphics.OrthographicCamera;
 import com.badlogic.gdx.graphics.Pixmap;
 import com.badlogic.gdx.graphics.Texture;
+import com.badlogic.gdx.backends.lwjgl3.Lwjgl3Application;
+import com.badlogic.gdx.graphics.g2d.BitmapFont;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 import com.badlogic.gdx.graphics.g2d.TextureRegion;
 import com.badlogic.gdx.graphics.glutils.FrameBuffer;
@@ -49,11 +58,24 @@ import com.badlogic.gdx.math.MathUtils;
  */
 public class CatApp extends ApplicationAdapter {
 
-    public static final int SCALE = 5;
+    /** Pixels per world unit; adjustable from the tray (Small/Normal/Large). */
+    public static volatile int scale = 3;
+    /**
+     * Extra gap kept above the work-area bottom while patrolling.
+     * -1 = auto: screen insets cover a normal taskbar, and an auto-hide
+     * taskbar (insets 0) falls back to the measured tray height.
+     */
+    public static volatile int bottomGap = -1;
     public static final int UNITS_W = 44;
     public static final int UNITS_H = 42;
-    public static final int WIN_W_PX = UNITS_W * SCALE;
-    public static final int WIN_H_PX = UNITS_H * SCALE;
+
+    public static int winW() {
+        return UNITS_W * scale;
+    }
+
+    public static int winH() {
+        return UNITS_H * scale;
+    }
 
     // Cat canvas (body + tail) rendered to an FBO so squash/stretch warps
     // the whole cat uniformly, eyes included.
@@ -67,6 +89,9 @@ public class CatApp extends ApplicationAdapter {
 
     /** Selected before create(): "cat", "pikachu", or "squirtle". */
     public static String skin = "squirtle";
+
+    /** Display name shown to LAN peers; set by the launcher. */
+    public static String userName = System.getProperty("user.name", "DeskCat");
 
     // per-skin geometry and style, set in create()
     private int tailX;
@@ -94,7 +119,8 @@ public class CatApp extends ApplicationAdapter {
     private float time;
 
     // squash & stretch spring
-    private float scaleY = 1f, scaleVel = 0f;
+    private final Spring squash = new Spring(160f, 12f, 0.7f, 1.5f);
+    private float scaleY = 1f;
 
     // dragging
     private boolean dragging;
@@ -160,6 +186,20 @@ public class CatApp extends ApplicationAdapter {
 
     private final ArrayList<Particle> particles = new ArrayList<Particle>();
 
+    // LAN presence + chat
+    private final String selfId = UUID.randomUUID().toString();
+    private LanClient lan;
+    private PeerRegistry peerReg;
+    private RemotePetsManager remoteMgr;
+    private BitmapFont font;
+    private OrthographicCamera pxCam;
+    private float stateTick;
+    private final Bubble ownBubble = new Bubble();
+
+    // tucked behind the taskbar via the right-click menu
+    private boolean hidden;
+    private int prevHideX, prevHideY;
+
     private static class Particle {
         float x, y, vx, vy, grav, life, maxLife, scale;
         Texture tex;
@@ -188,23 +228,39 @@ public class CatApp extends ApplicationAdapter {
         fboRegion.flip(false, true);
 
         window = ((Lwjgl3Graphics) Gdx.graphics).getWindow();
-        GLFW.glfwSetWindowAttrib(window.getWindowHandle(),
-                GLFW.GLFW_FLOATING, GLFW.GLFW_TRUE);
-        hideFromTaskbar();
+        WindowTricks.floating(window);
+        WindowTricks.applyExStyles(window, false);
         setupTray();
         setupKeyboardHook();
+
+        font = new BitmapFont();
+        pxCam = new OrthographicCamera();
+        pxCam.setToOrtho(false, winW(), winH());
+
+        peerReg = new PeerRegistry(selfId);
+        remoteMgr = new RemotePetsManager((Lwjgl3Application) Gdx.app, font, px,
+                (peer, text) -> doSendChat(text, peer.id));
+        lan = new LanClient(selfId);
+        lan.start();   // failure is silent; the pet just stays solo
 
         Gdx.input.setInputProcessor(new InputAdapter() {
             @Override
             public boolean touchDown(int sx, int sy, int pointer, int button) {
                 if (button == Input.Buttons.RIGHT) {
-                    if (!trayOk) {
-                        Gdx.app.exit();   // fallback exit when no tray exists
-                    }
+                    showPetMenu();
                     return true;
                 }
-                float ux = sx / (float) SCALE;
-                float uy = UNITS_H - sy / (float) SCALE;
+                if (button == Input.Buttons.MIDDLE) {
+                    ChatInput.show(window.getPositionX(), window.getPositionY(),
+                            text -> Gdx.app.postRunnable(() -> sendChat(text)));
+                    return true;
+                }
+                if (hidden) {
+                    toggleHidden();   // click the peeking head to bring it out
+                    return true;
+                }
+                float ux = sx / (float) scale;
+                float uy = UNITS_H - sy / (float) scale;
                 if (ux >= CAT_X + 1 && ux <= CAT_X + FBO_W - 4 && uy <= 28) {
                     Point p = globalCursor();
                     if (p != null) {
@@ -231,15 +287,15 @@ public class CatApp extends ApplicationAdapter {
                 pressed = false;
                 if (dragging) {
                     dragging = false;
-                    scaleVel += 3f;   // jelly wobble on release
+                    squash.kick(3f);   // jelly wobble on release
                 }
                 return true;
             }
 
             @Override
             public boolean mouseMoved(int sx, int sy) {
-                float ux = sx / (float) SCALE;
-                float uy = UNITS_H - sy / (float) SCALE;
+                float ux = sx / (float) scale;
+                float uy = UNITS_H - sy / (float) scale;
                 if (!dragging && ux >= 4 && ux <= 27 && uy >= 11 && uy <= 25) {
                     petFresh = 0.25f;   // cursor is stroking the head
                 }
@@ -258,96 +314,154 @@ public class CatApp extends ApplicationAdapter {
         sleeping = false;
     }
 
-    private static final int GWL_EXSTYLE = -20;
-    private static final long WS_EX_TOOLWINDOW = 0x00000080L;
-    private static final long WS_EX_APPWINDOW = 0x00040000L;
+    private void showPetMenu() {
+        Point p = globalCursor();
+        int mx = p == null ? window.getPositionX() : p.x;
+        int my = p == null ? window.getPositionY() : p.y;
+        ArrayList<PetMenu.Item> items = new ArrayList<PetMenu.Item>();
+        items.add(new PetMenu.Item("Say…", () ->
+                ChatInput.show(window.getPositionX(), window.getPositionY(),
+                        text -> Gdx.app.postRunnable(() -> sendChat(text)))));
+        if (ownBubble.isActive(System.currentTimeMillis())) {
+            items.add(new PetMenu.Item("Dismiss bubble", () ->
+                    Gdx.app.postRunnable(ownBubble::clear)));
+        }
+        items.add(new PetMenu.Item(hidden ? "Come out" : "Hide behind taskbar",
+                () -> Gdx.app.postRunnable(this::toggleHidden)));
+        if (!trayOk) {
+            items.add(new PetMenu.Item("Quit DeskCat", () ->
+                    Gdx.app.postRunnable(() -> Gdx.app.exit())));
+        }
+        PetMenu.show(mx, my, items.toArray(new PetMenu.Item[0]));
+    }
 
-    /** Swap the taskbar button for tool-window style (Windows only). */
-    private void hideFromTaskbar() {
-        try {
-            long glfwWin = window.getWindowHandle();
-            long hwnd = org.lwjgl.glfw.GLFWNativeWin32.glfwGetWin32Window(glfwWin);
-            GLFW.glfwHideWindow(glfwWin);
-            long ex = org.lwjgl.system.windows.User32.GetWindowLongPtr(hwnd, GWL_EXSTYLE);
-            ex = (ex | WS_EX_TOOLWINDOW) & ~WS_EX_APPWINDOW;
-            org.lwjgl.system.windows.User32.SetWindowLongPtr(hwnd, GWL_EXSTYLE, ex);
-            GLFW.glfwShowWindow(glfwWin);
-        } catch (Throwable t) {
-            // non-Windows or API unavailable: the window stays in the taskbar
+    /**
+     * Tuck the pet down into the taskbar area (dropping always-on-top so the
+     * taskbar covers it, ears peeking out); toggling again restores it.
+     */
+    private void toggleHidden() {
+        if (!hidden) {
+            hidden = true;
+            prevHideX = window.getPositionX();
+            prevHideY = window.getPositionY();
+            wanderState = 0;
+            sleeping = false;
+            try {
+                GraphicsConfiguration gc = GraphicsEnvironment
+                        .getLocalGraphicsEnvironment().getDefaultScreenDevice()
+                        .getDefaultConfiguration();
+                Rectangle b = gc.getBounds();
+                Insets ins = Toolkit.getDefaultToolkit().getScreenInsets(gc);
+                int taskbarTop = b.y + b.height - ins.bottom;
+                GLFW.glfwSetWindowAttrib(window.getWindowHandle(),
+                        GLFW.GLFW_FLOATING, GLFW.GLFW_FALSE);
+                window.setPosition(window.getPositionX(), taskbarTop - 17 * scale);
+            } catch (Throwable t) {
+                hidden = false;
+            }
+        } else {
+            hidden = false;
+            WindowTricks.floating(window);
+            window.setPosition(prevHideX, prevHideY);
+            squash.kick(2f);
         }
     }
 
-    /** Load (or swap, at runtime) all skin-specific art and geometry. */
-    private void applySkin(String name) {
-        skin = name;
-        if (bodyTex != null) {
-            bodyTex.dispose();
+    /** Drain received LAN messages, sync peer windows, broadcast our state. */
+    private void updateNet(float dt) {
+        long now = System.currentTimeMillis();
+        for (com.deskcat.net.LanMsg m = lan.poll(); m != null; m = lan.poll()) {
+            peerReg.onMessage(m, now);
         }
-        if (tailTex != null) {
-            for (Texture t : tailTex) {
-                t.dispose();
+        peerReg.prune(now);
+        remoteMgr.sync(peerReg.peers());
+
+        stateTick -= dt;
+        if (stateTick <= 0f) {
+            stateTick = 0.2f;   // 5 Hz presence/pose broadcast
+            Rectangle ub = remoteMgr.usable();
+            float xf = (window.getPositionX() - ub.x)
+                    / (float) Math.max(1, ub.width - winW());
+            float yf = (window.getPositionY() - ub.y)
+                    / (float) Math.max(1, ub.height - winH());
+            int anim = dragging ? LanMsg.ANIM_DRAG
+                    : sleeping ? LanMsg.ANIM_SLEEP
+                    : (wanderState == 2 || wanderState == 3) ? LanMsg.ANIM_WALK
+                    : LanMsg.ANIM_IDLE;
+            lan.send(LanProtocol.encodeState(selfId, userName, skin,
+                    clamp01(xf), clamp01(yf),
+                    facingLeft && (wanderState == 2 || wanderState == 3), anim));
+        }
+    }
+
+    private static float clamp01(float v) {
+        return v < 0f ? 0f : (v > 1f ? 1f : v);
+    }
+
+    /**
+     * Called on the render thread with what the user typed. "@name message"
+     * DMs the peer with that display name; anything else broadcasts.
+     */
+    private void sendChat(String raw) {
+        String text = raw;
+        String target = null;
+        if (raw.startsWith("@")) {
+            int sp = raw.indexOf(' ');
+            if (sp > 1) {
+                Peer p = peerReg.byName(raw.substring(1, sp));
+                if (p != null) {
+                    target = p.id;
+                    text = raw.substring(sp + 1).trim();
+                }
             }
         }
-        if (pawTex != null) {
-            pawTex.dispose();
+        doSendChat(text, target);
+    }
+
+    /** targetId null → broadcast; otherwise a DM to that peer. */
+    private void doSendChat(String text, String targetId) {
+        if (text.isEmpty()) {
+            return;
         }
-        if ("squirtle".equalsIgnoreCase(name)) {
-            eyeStyle = 2;
-            attackType = 2;
-            bodyTex = PixelArt.squirtleBody();
-            tailTex = PixelArt.squirtleTail();
-            tailX = 26;
-            eyeLX = 11;
-            eyeRX = 20;
-            eyeW = 3;
-            eyeH = 4;
-            eyeY = 16;
-            eyeCenterX = 16.5f;
-            eyeCenterY = 17.5f;
-            furColor = C_BLUE;
-            irisColor = C_IRIS_BROWN;
-            pawTex = PixelArt.fromMap(PixelArt.PAW_SQUIRT);
-        } else if ("pikachu".equalsIgnoreCase(name)) {
-            eyeStyle = 1;
-            attackType = 1;
-            bodyTex = PixelArt.fromMap(PixelArt.PIKA_BODY);
-            tailTex = new Texture[] {
-                    PixelArt.fromMap(PixelArt.PIKA_TAIL_A),
-                    PixelArt.fromMap(PixelArt.PIKA_TAIL_B),
-                    PixelArt.fromMap(PixelArt.PIKA_TAIL_C),
-            };
-            tailX = 27;
-            eyeLX = 9;
-            eyeRX = 20;
-            eyeW = 3;
-            eyeH = 3;
-            eyeY = 15;
-            eyeCenterX = 15.5f;
-            eyeCenterY = 16f;
-            furColor = C_YELLOW;
-            irisColor = C_IRIS_GREEN;
-            pawTex = PixelArt.fromMap(PixelArt.PAW_PIKA);
-        } else {
-            eyeStyle = 0;
-            attackType = 0;
-            bodyTex = PixelArt.fromMap(PixelArt.BODY);
-            tailTex = new Texture[] {
-                    PixelArt.fromMap(PixelArt.TAIL_A),
-                    PixelArt.fromMap(PixelArt.TAIL_B),
-                    PixelArt.fromMap(PixelArt.TAIL_C),
-            };
-            tailX = 26;
-            eyeLX = 7;
-            eyeRX = 18;
-            eyeW = 4;
-            eyeH = 3;
-            eyeY = 15;
-            eyeCenterX = 14f;
-            eyeCenterY = 16f;
-            furColor = C_ORANGE;
-            irisColor = C_IRIS_GREEN;
-            pawTex = PixelArt.fromMap(PixelArt.PAW_CAT);
-        }
+        lan.send(LanProtocol.encodeChat(selfId, userName, text, targetId));
+        ownBubble.show(text, System.currentTimeMillis());
+        wake();
+    }
+
+    /** Resize the pet (and the chat/bubble camera); remote windows follow. */
+    private void applyScale(int s) {
+        int homeXu = window.getPositionX(), homeYu = window.getPositionY();
+        scale = s;
+        Gdx.graphics.setWindowedMode(winW(), winH());
+        window.setPosition(homeXu, homeYu);
+        pxCam.setToOrtho(false, winW(), winH());
+        wanderState = 0;   // stale floor/patrol geometry after resize
+    }
+
+    /**
+     * Load (or swap, at runtime) all skin-specific art and geometry. Textures
+     * come from the shared {@link SkinAssets} cache — remote peers' pets may
+     * render the same skin, so nothing is disposed here; the cache is torn
+     * down once in dispose().
+     */
+    private void applySkin(String name) {
+        skin = name;
+        SkinAssets a = SkinAssets.get(name);
+        eyeStyle = a.eyeStyle;
+        attackType = a.attackType;
+        bodyTex = a.bodyTex;
+        tailTex = a.tailTex;
+        pawTex = a.pawTex;
+        tailX = a.tailX;
+        eyeLX = a.eyeLX;
+        eyeRX = a.eyeRX;
+        eyeW = a.eyeW;
+        eyeH = a.eyeH;
+        eyeY = a.eyeY;
+        eyeCenterX = a.eyeCenterX;
+        eyeCenterY = a.eyeCenterY;
+        furColor = a.furColor;
+        irisColor = a.irisColor;
         // drop any in-flight attack so it doesn't straddle two skins
         boltLeft = 0f;
         waterLeft = 0f;
@@ -406,6 +520,43 @@ public class CatApp extends ApplicationAdapter {
                 skinMenu.add(items[i]);
             }
             menu.add(skinMenu);
+
+            // pet size: pixels per world unit (applies to remote pets too)
+            Menu sizeMenu = new Menu("Size");
+            String[] sizeNames = {"Small", "Normal", "Large"};
+            int[] sizeVals = {3, 5, 7};
+            final CheckboxMenuItem[] sizeItems = new CheckboxMenuItem[sizeVals.length];
+            for (int i = 0; i < sizeVals.length; i++) {
+                final int idx = i;
+                sizeItems[i] = new CheckboxMenuItem(sizeNames[i], sizeVals[i] == scale);
+                sizeItems[i].addItemListener(e -> {
+                    for (int j = 0; j < sizeItems.length; j++) {
+                        sizeItems[j].setState(j == idx);
+                    }
+                    Gdx.app.postRunnable(() -> applyScale(sizeVals[idx]));
+                });
+                sizeMenu.add(sizeItems[i]);
+            }
+            menu.add(sizeMenu);
+
+            // extra clearance above the taskbar while patrolling
+            Menu gapMenu = new Menu("Taskbar gap");
+            String[] gapNames = {"Auto", "0 px", "20 px", "40 px", "60 px"};
+            int[] gapVals = {-1, 0, 20, 40, 60};
+            final CheckboxMenuItem[] gapItems = new CheckboxMenuItem[gapVals.length];
+            for (int i = 0; i < gapVals.length; i++) {
+                final int idx = i;
+                gapItems[i] = new CheckboxMenuItem(gapNames[i],
+                        gapVals[i] == bottomGap);
+                gapItems[i].addItemListener(e -> {
+                    for (int j = 0; j < gapItems.length; j++) {
+                        gapItems[j].setState(j == idx);
+                    }
+                    bottomGap = gapVals[idx];
+                });
+                gapMenu.add(gapItems[i]);
+            }
+            menu.add(gapMenu);
             menu.addSeparator();
 
             MenuItem exit = new MenuItem("Quit DeskCat");
@@ -452,7 +603,7 @@ public class CatApp extends ApplicationAdapter {
             return;
         }
         wake();
-        scaleVel += 5f;          // excited hop
+        squash.kick(5f);          // excited hop
         if (attackType == 1) {
             boltLeft = 0.7f;
             bolts.clear();
@@ -512,6 +663,7 @@ public class CatApp extends ApplicationAdapter {
         updateBlink(dt);
         updateTail(dt);
         updateParticles(dt);
+        updateNet(dt);
 
         renderCatToFbo();
         renderWindow();
@@ -538,8 +690,8 @@ public class CatApp extends ApplicationAdapter {
         }
 
         // gaze from eye center (screen coords, y down) toward the cursor
-        float eyeScrX = window.getPositionX() + (CAT_X + eyeCenterX) * SCALE;
-        float eyeScrY = window.getPositionY() + (UNITS_H - eyeCenterY) * SCALE;
+        float eyeScrX = window.getPositionX() + (CAT_X + eyeCenterX) * scale;
+        float eyeScrY = window.getPositionY() + (UNITS_H - eyeCenterY) * scale;
         gazeX = MathUtils.clamp((cursor.x - eyeScrX) / 240f, -1f, 1f);
         gazeY = MathUtils.clamp((eyeScrY - cursor.y) / 240f, -1f, 1f);
 
@@ -652,8 +804,8 @@ public class CatApp extends ApplicationAdapter {
 
         if (wanderState == 0) {
             boolean eligible = !sleeping && !dragging && !pressed && !petActive
-                    && boltLeft <= 0f && waterLeft <= 0f && typingLeft <= 0f
-                    && idleTime > 3f;
+                    && !hidden && boltLeft <= 0f && waterLeft <= 0f
+                    && typingLeft <= 0f && idleTime > 3f;
             if (eligible) {
                 wanderIn -= dt;
                 if (wanderIn <= 0f) {
@@ -666,7 +818,7 @@ public class CatApp extends ApplicationAdapter {
             if (ny >= floorY) {
                 ny = floorY;
                 wanderState = 2;
-                scaleVel -= 5f;   // landing squash
+                squash.kick(-5f);   // landing squash
                 winXf = window.getPositionX();
             }
             window.setPosition(window.getPositionX(), Math.round(ny));
@@ -702,7 +854,7 @@ public class CatApp extends ApplicationAdapter {
             if (t >= 1f) {
                 wanderState = 0;
                 wanderIn = MathUtils.random(18f, 40f);
-                scaleVel += 2f;   // little settle wobble back on its perch
+                squash.kick(2f);   // little settle wobble back on its perch
             }
         }
     }
@@ -715,11 +867,12 @@ public class CatApp extends ApplicationAdapter {
                     .getDefaultConfiguration();
             Rectangle b = gc.getBounds();
             Insets ins = Toolkit.getDefaultToolkit().getScreenInsets(gc);
-            floorY = b.y + b.height - ins.bottom - WIN_H_PX;
+            // insets auto-detect the taskbar; bottomGap only adds extra room
+            floorY = b.y + b.height - ins.bottom - winH() - Math.max(0, bottomGap);
             homeX = window.getPositionX();
             homeY = window.getPositionY();
             patrolMinX = b.x + 10;
-            patrolMaxX = b.x + b.width - WIN_W_PX - 10;
+            patrolMaxX = b.x + b.width - winW() - 10;
             walkTargetX = MathUtils.randomBoolean() ? patrolMinX : patrolMaxX;
             winXf = homeX;
             facingLeft = walkTargetX < winXf;
@@ -744,10 +897,7 @@ public class CatApp extends ApplicationAdapter {
         float target = dragging ? 1.2f
                 : (wanderState == 1 ? 1.12f          // stretch while falling
                 : (wanderState == 4 ? 1.08f : 1f));  // and while hopping home
-        scaleVel += (target - scaleY) * 160f * dt;
-        scaleVel -= scaleVel * 12f * dt;
-        scaleY += scaleVel * dt;
-        scaleY = MathUtils.clamp(scaleY, 0.7f, 1.5f);
+        scaleY = squash.update(target, dt);
     }
 
     private void updateBlink(float dt) {
@@ -940,10 +1090,22 @@ public class CatApp extends ApplicationAdapter {
         }
 
         batch.end();
+
+        long nowMs = System.currentTimeMillis();
+        if (ownBubble.isActive(nowMs)) {
+            batch.setProjectionMatrix(pxCam.combined);
+            batch.begin();
+            Bubbles.draw(batch, font, px, ownBubble.text(),
+                    ownBubble.alpha(nowMs), winW(), winH() - 4);
+            batch.end();
+        }
     }
 
     @Override
     public void dispose() {
+        if (lan != null) {
+            lan.close();
+        }
         try {
             GlobalScreen.unregisterNativeHook();
         } catch (Throwable ignored) {
@@ -956,15 +1118,12 @@ public class CatApp extends ApplicationAdapter {
         }
         batch.dispose();
         fbo.dispose();
-        bodyTex.dispose();
-        for (Texture t : tailTex) {
-            t.dispose();
-        }
+        font.dispose();
+        SkinAssets.disposeAll();
         heartTex.dispose();
         zzzTex.dispose();
         alertTex.dispose();
         sparkTex.dispose();
-        pawTex.dispose();
         waterDropTex.dispose();
         px.dispose();
     }
