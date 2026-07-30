@@ -115,12 +115,17 @@ func _section(parent: VBoxContainer, heading: String) -> VBoxContainer:
 	return box
 
 
+var _skin_ids: Array = []
+
+
 func _build_character(box: VBoxContainer) -> void:
 	_skin_opt = OptionButton.new()
-	for id in AppSettings.SKINS:
-		_skin_opt.add_item(id.capitalize())
+	_skin_ids.clear()
+	for entry in PetSkin.catalog():
+		_skin_opt.add_item(entry.label)
+		_skin_ids.append(entry.id)
 	_skin_opt.item_selected.connect(func(i: int) -> void:
-		AppSettings.skin_id = AppSettings.SKINS[i])
+		AppSettings.skin_id = _skin_ids[i])
 	box.add_child(_skin_opt)
 
 
@@ -256,7 +261,7 @@ func _on_setting_changed(_key: String) -> void:
 ## change signals (the AppSettings setters no-op on equal values anyway,
 ## so even a stray echo can't loop).
 func _sync() -> void:
-	_skin_opt.select(maxi(AppSettings.SKINS.find(AppSettings.skin_id), 0))
+	_skin_opt.select(maxi(_skin_ids.find(AppSettings.skin_id), 0))
 	for i in _size_checks.size():
 		_size_checks[i].set_pressed_no_signal(i == AppSettings.size_index)
 	if _name_edit.text != AppSettings.user_name:

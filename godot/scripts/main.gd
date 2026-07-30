@@ -12,13 +12,13 @@ const HIT_MARGIN := 28.0
 
 @onready var pet: Node2D = $Pet
 
-## Do Not Disturb: hide remote pets, ignore incoming chat/shoot.
-## (Own presence still broadcasts; enforced by the LAN layer when it lands.)
-var dnd := false
-
 var _tray: StatusIndicator
-var _skin_ids: Array[String] = []
 var _pet3d: Node = null
+var reminders: Reminders
+var groove: Groove
+var net: NetController
+var chat: ChatInput
+var _peer_menu: PopupMenu = null
 var _last_polygon := PackedVector2Array()
 var _desktop_poll := 0.0
 var _desktop_poll_supported := true
@@ -40,6 +40,140 @@ func _ready() -> void:
 	var origin := DisplayServer.screen_get_position(DisplayServer.SCREEN_PRIMARY)
 	var usable := DisplayServer.screen_get_usable_rect(DisplayServer.SCREEN_PRIMARY)
 	pet.position = Vector2(usable.end - origin) - Vector2(220, 0)
+
+	# Settings hub: seed from current state, then follow changes.
+	AppSettings.skin_id = pet.skin_name
+	AppSettings.bus().changed.connect(_on_setting)
+
+	reminders = Reminders.new()
+	add_child(reminders)
+	reminders.remind.connect(func(_kind: StringName, text: String) -> void:
+		pet.say_local(text))
+	groove = Groove.new()
+	add_child(groove)
+	groove.beat.connect(func(strength: float) -> void:
+		if pet.state == pet.State.IDLE:
+			pet.spring_vel += 2.0 * strength)
+
+	net = NetController.new()
+	net.user_name = AppSettings.user_name
+	net.skin = pet.skin_name
+	add_child(net)
+	chat = ChatInput.new()
+	add_child(chat)
+	chat.submitted.connect(_on_chat_submitted)
+	net.chat_own_bubble.connect(pet.show_own_bubble)
+	net.shot_incoming.connect(func(from_peer) -> void:
+		pet.react_to_shot(from_peer))
+	net.shot_fired.connect(func(_target) -> void:
+		pet.attack_flash())
+	net.whipped_incoming.connect(func(_from_peer) -> void:
+		pet.react_to_whip())
+	net.peer_menu_requested.connect(_show_peer_menu)
+	pet.chat_requested.connect(func() -> void:
+		chat.open(pet.position - Vector2(0, pet.body_h() + 8)))
+	pet.menu_requested.connect(_show_own_menu)
+
+
+func _show_own_menu(screen_pos: Vector2) -> void:
+	if _peer_menu:
+		_peer_menu.queue_free()
+	_peer_menu = PopupMenu.new()
+	add_child(_peer_menu)
+	_peer_menu.add_item("Say…", 1)
+	if pet.own_bubble.is_active(Time.get_ticks_msec()):
+		_peer_menu.add_item("Dismiss bubble", 2)
+	var idx := 10
+	var actions := {}
+	for peer in net.registry.peers():
+		var display: String = peer.name if peer.name != "" else "?"
+		_peer_menu.add_item("Shoot %s" % display, idx)
+		actions[idx] = ["shoot", peer]
+		_peer_menu.add_item("Whip %s" % display, idx + 1)
+		actions[idx + 1] = ["whip", peer]
+		idx += 2
+	_peer_menu.id_pressed.connect(_on_own_menu.bind(actions))
+	_peer_menu.position = Vector2i(screen_pos)
+	_peer_menu.popup()
+
+
+func _on_own_menu(id: int, actions: Dictionary) -> void:
+	match id:
+		1:
+			chat.open(pet.position - Vector2(0, pet.body_h() + 8))
+		2:
+			pet.own_bubble.clear()
+		_:
+			if actions.has(id):
+				var a: Array = actions[id]
+				if a[0] == "shoot":
+					net.shoot(a[1])
+				else:
+					net.whip(a[1])
+
+
+func _on_chat_submitted(text: String) -> void:
+	if _chat_target_id != "":
+		var peer = net.pet_for(_chat_target_id)
+		if peer:
+			net.send_chat_to(peer.peer, text)
+		else:
+			net.broadcast_chat(text)
+		_chat_target_id = ""
+	else:
+		net.broadcast_chat(text)
+
+
+var _chat_target_id := ""
+
+
+func _show_peer_menu(peer, screen_pos: Vector2) -> void:
+	if _peer_menu:
+		_peer_menu.queue_free()
+	_peer_menu = PopupMenu.new()
+	add_child(_peer_menu)
+	var display: String = peer.name if peer.name != "" else "them"
+	_peer_menu.add_item("Message %s…" % display, 1)
+	_peer_menu.add_item("Shoot %s" % display, 2)
+	_peer_menu.add_item("Dismiss bubble", 3)
+	_peer_menu.id_pressed.connect(_on_peer_menu.bind(peer, screen_pos))
+	_peer_menu.position = Vector2i(screen_pos)
+	_peer_menu.popup()
+
+
+func _on_peer_menu(id: int, peer, screen_pos: Vector2) -> void:
+	match id:
+		1:
+			_chat_target_id = peer.id
+			chat.open(screen_pos)
+		2:
+			net.shoot(peer)
+		3:
+			peer.bubble.clear()
+
+
+func _on_setting(key: String) -> void:
+	match key:
+		"skin_id":
+			pet.set_skin(AppSettings.skin_id)
+		"size_index":
+			pet.size_factor = AppSettings.size_factor()
+		"sound_on":
+			SoundFx.enabled = AppSettings.sound_on
+		"music_groove":
+			groove.enabled = AppSettings.music_groove
+		"reminders_stretch", "stretch_interval_min":
+			reminders.stretch_enabled = AppSettings.reminders_stretch
+			reminders.stretch_interval_min = AppSettings.stretch_interval_min
+		"reminders_water", "water_interval_min":
+			reminders.water_enabled = AppSettings.reminders_water
+			reminders.water_interval_min = AppSettings.water_interval_min
+		"dnd":
+			net.dnd = AppSettings.dnd
+		"peer_alpha":
+			net.peer_alpha = AppSettings.peer_alpha
+		"user_name":
+			net.user_name = AppSettings.user_name
 
 
 func _setup_overlay_window() -> void:
@@ -67,21 +201,9 @@ func _setup_tray() -> void:
 	_tray.tooltip = "DeskCat (Godot)"
 	var menu := PopupMenu.new()
 	add_child(menu)
-	_skin_ids.clear()
-	var i := 0
-	for entry in PetSkin.catalog():
-		menu.add_radio_check_item("Skin: " + entry.label, 40 + i)
-		_skin_ids.append(entry.id)
-		if entry.id == pet.skin_name:
-			menu.set_item_checked(menu.get_item_index(40 + i), true)
-		i += 1
+	menu.add_item("Settings…", 50)
+	menu.add_item("Patch notes", 51)
 	menu.add_separator()
-	menu.add_radio_check_item("Size: Small", 10)
-	menu.add_radio_check_item("Size: Normal", 11)
-	menu.add_radio_check_item("Size: Large", 12)
-	menu.set_item_checked(menu.get_item_index(10), true)
-	menu.add_separator()
-	menu.add_check_item("Do Not Disturb (only my pet)", 30)
 	menu.add_check_item("3D test pet", 20)
 	menu.add_separator()
 	menu.add_item("Quit", 0)
@@ -95,27 +217,15 @@ func _on_tray(id: int) -> void:
 	match id:
 		0:
 			get_tree().quit()
-		10, 11, 12:
-			# Java scales: Small 3 / Normal 4 / Large 5 px per art pixel.
-			pet.size_factor = [1.0, 4.0 / 3.0, 5.0 / 3.0][id - 10]
-			for item_id in [10, 11, 12]:
-				menu.set_item_checked(menu.get_item_index(item_id),
-						item_id == id)
 		20:
 			var idx := menu.get_item_index(20)
 			var on := not menu.is_item_checked(idx)
 			menu.set_item_checked(idx, on)
 			_toggle_pet3d(on)
-		30:
-			var idx := menu.get_item_index(30)
-			dnd = not menu.is_item_checked(idx)
-			menu.set_item_checked(idx, dnd)
-		_:
-			if id >= 40 and id < 40 + _skin_ids.size():
-				pet.set_skin(_skin_ids[id - 40])
-				for j in _skin_ids.size():
-					menu.set_item_checked(menu.get_item_index(40 + j),
-							40 + j == id)
+		50:
+			SettingsWindow.show_window(self)
+		51:
+			PatchNotes.show_window()
 
 
 ## Proof-of-concept 3D pet: a SubViewport with transparent background
@@ -152,10 +262,7 @@ func _tray_icon() -> Texture2D:
 
 func _process(delta: float) -> void:
 	_update_passthrough()
-	# Perf: idle-down to 30 fps while asleep with nothing animating.
-	var can_doze: bool = pet.state == pet.State.SLEEP \
-			and pet.particles.is_empty() and _pet3d == null
-	Engine.max_fps = 30 if can_doze else 60
+	_feed_net()
 	# Follow the user across Windows virtual desktops (needs native ext).
 	if _desktop_poll_supported:
 		_desktop_poll += delta
@@ -164,12 +271,35 @@ func _process(delta: float) -> void:
 			_desktop_poll_supported = \
 					NativeBridge.ensure_on_current_desktop(WINDOW_ID) \
 					or not NativeBridge.available()
+	# Perf: idle-down to 30 fps while asleep with nothing animating.
+	var can_doze: bool = pet.state == pet.State.SLEEP \
+			and pet.particles.is_empty() and _pet3d == null
+	Engine.max_fps = 30 if can_doze else 60
+
+
+## Own state → LAN, mapped to the wire's work-area fractions and anim ids.
+func _feed_net() -> void:
+	var work := RemotePet._work_rect()
+	var fx := clampf((pet.position.x - work.position.x) / work.size.x, 0, 1)
+	var fy := clampf((pet.position.y - work.position.y) / work.size.y, 0, 1)
+	var anim := LanMsg.ANIM_IDLE
+	if pet.ko_t > 0.0:
+		anim = LanMsg.ANIM_KO
+	elif pet.state == pet.State.DRAG:
+		anim = LanMsg.ANIM_DRAG
+	elif pet.state == pet.State.SLEEP:
+		anim = LanMsg.ANIM_SLEEP
+	elif pet.state == pet.State.PATROL or pet.state == pet.State.RETURN:
+		anim = LanMsg.ANIM_WALK
+	net.set_self_state(fx, fy, pet.facing_left, anim)
+	net.skin = pet.skin_name
 
 
 ## The overlay must swallow clicks ONLY over interactive sprites; the rest
 ## of the screen belongs to whatever is underneath. One polygon per window —
-## while dragging, the whole overlay turns interactive so fast cursor moves
-## can't escape the region and drop clicks through mid-drag.
+## disjoint rects are stitched with zero-area bridges (even-odd fill drops
+## the bridges). While dragging, the whole overlay turns interactive so fast
+## cursor moves can't escape the region and drop clicks through mid-drag.
 func _update_passthrough() -> void:
 	var poly: PackedVector2Array
 	if pet.dragging():
@@ -177,15 +307,33 @@ func _update_passthrough() -> void:
 		poly = PackedVector2Array([Vector2.ZERO, Vector2(size.x, 0), size,
 				Vector2(0, size.y)])
 	else:
-		var r: Rect2 = pet.hit_rect().grow(HIT_MARGIN)
+		var rects: Array[Rect2] = []
+		var pr: Rect2 = pet.hit_rect().grow(HIT_MARGIN)
+		# Never cover the taskbar: clicks under the pet's feet must reach it.
+		if pet.edge == 0 and pet.state != pet.State.FALL:
+			pr.size.y = maxf(8.0, pet.floor_y() - pr.position.y)
+		rects.append(pr)
 		if _pet3d:
-			r = r.merge(Rect2(_pet3d.position, Vector2(220, 220)))
-		poly = PackedVector2Array([
-			r.position,
-			r.position + Vector2(r.size.x, 0),
-			r.end,
-			r.position + Vector2(0, r.size.y),
-		])
+			rects.append(Rect2(_pet3d.position, Vector2(220, 220)))
+		if chat and chat.is_open():
+			rects.append(chat.get_rect().grow(8.0))
+		if net:
+			for rr in net.pet_hit_rects():
+				rects.append(rr.grow(HIT_MARGIN))
+		poly = _rects_to_polygon(rects)
 	if poly != _last_polygon:
 		_last_polygon = poly
 		DisplayServer.window_set_mouse_passthrough(poly, WINDOW_ID)
+
+
+static func _rects_to_polygon(rects: Array[Rect2]) -> PackedVector2Array:
+	var poly := PackedVector2Array()
+	for r in rects:
+		# 5 points per rect (closing back to its origin) — consecutive rects
+		# connect via zero-area bridge edges that even-odd fill excludes.
+		poly.append(r.position)
+		poly.append(r.position + Vector2(r.size.x, 0))
+		poly.append(r.end)
+		poly.append(r.position + Vector2(0, r.size.y))
+		poly.append(r.position)
+	return poly

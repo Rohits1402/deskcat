@@ -7,17 +7,23 @@ extends Node2D
 enum State { IDLE, PET, DRAG, STARTLE, ATTACK, KNEAD, PATROL, RETURN, SLEEP,
 		FALL }
 
-const GRAVITY := 2400.0
+signal chat_requested
+signal menu_requested(screen_pos: Vector2)
+
+const GRAVITY := 2600.0  # Java fall gravity
 
 ## Java scales: Small 3 / Normal 4 / Large 5 pixels per art pixel.
 const PX_BASE := 3.0
 
-const SLEEP_AFTER := 75.0
-const PATROL_AFTER := 25.0
-const PATROL_SPEED := 55.0
-const STARTLE_CURSOR_SPEED := 2600.0  # px/s toward the pet
-const CLICK_MAX_TIME := 0.22
-const CLICK_MAX_MOVE := 6.0
+# Java constants (gap-analysis verified): sleep 60s, patrol 85 px/s,
+# return 140 px/s, startle speed 2200 within 500 px, drag rule 4px/0.35s.
+const SLEEP_AFTER := 60.0
+const PATROL_SPEED := 85.0
+const RETURN_SPEED := 140.0
+const STARTLE_CURSOR_SPEED := 2200.0
+const STARTLE_RADIUS := 500.0
+const CLICK_MAX_TIME := 0.35
+const CLICK_MAX_MOVE := 4.0
 
 var skin: PetSkin
 var skin_name := "squirtle"
@@ -37,7 +43,11 @@ var drag_offset := Vector2.ZERO
 var press_time := 0.0
 var press_pos := Vector2.ZERO
 var pressed := false
-var pet_heat := 0.0          # builds while the cursor strokes the pet
+# Java petting model: mouse MOTION over the head sets pet_fresh=0.25;
+# while fresh, pet_charge climbs (cap 2.0); petting is pet_charge > 0.35.
+var pet_fresh := 0.0
+var pet_charge := 0.0
+var wander_in := 25.0        # Java wanderIn countdown, re-rolled 18..40
 var state_timer := 0.0       # generic countdown for STARTLE/ATTACK
 var knead_left := 0.0
 var home_x := 0.0
@@ -46,7 +56,20 @@ var next_blink := 3.0
 
 var _prev_cursor := Vector2.ZERO
 var _cursor_vel := Vector2.ZERO
+var _cursor_speed := 0.0  # Java: lerp-smoothed at 0.5
+var _heart_t := 0.0
 var fall_vel := 0.0
+var slide_vel := 0.0  # horizontal knockback (whip)
+
+# Own speech bubble (chat + reminders).
+var own_bubble := Peer.Bubble.new()
+
+# KO overlay (java-render-spec §6): not a state — modifies the draw quad
+# while ko_t > 0. mode 0 = topple 90°, 1 = pancake squish.
+const KO_TOTAL := 1.6
+var ko_t := 0.0
+var ko_mode := 0
+var ko_dir := 1.0
 
 # Spring.java port: scale_y spring around 1.0, stiffness 160, damping 12,
 # clamped [0.7, 1.5]; scale_x = 1 - (scale_y - 1) * 0.55.
@@ -153,25 +176,34 @@ func _process(delta: float) -> void:
 	_update_tail(delta)
 
 	var keys := NativeBridge.key_delta()
+	ko_t = maxf(0.0, ko_t - delta)
 
 	match state:
 		State.IDLE:
 			idle_time += delta
-			_check_petting(delta)
+			if _cursor_speed > 40.0:
+				idle_time = 0.0  # Java: fast cursor counts as activity
+			_update_petting(delta)
 			_check_startle()
 			if keys > 0:
 				_enter_knead()
 			elif idle_time > SLEEP_AFTER:
 				state = State.SLEEP
-			elif idle_time > PATROL_AFTER and randf() < delta * 0.08:
-				_enter_patrol()
+			else:
+				wander_in -= delta
+				if wander_in <= 0.0 and idle_time > 3.0:
+					_enter_patrol()
 		State.PET:
 			idle_time = 0.0
-			_check_petting(delta)
-			if pet_heat <= 0.0:
+			_update_petting(delta)
+			if pet_charge <= 0.35:
 				state = State.IDLE
-			elif randf() < delta * 3.0:
-				_spawn(&"heart", Vector2(randf_range(-20, 20), -body_h()))
+			else:
+				_heart_t += delta
+				if _heart_t >= 0.35:  # Java heart cadence
+					_heart_t = 0.0
+					_spawn(&"heart",
+							Vector2(randf_range(-15, 20), -body_h()))
 		State.DRAG:
 			var mouse := get_viewport().get_mouse_position()
 			position = (mouse + drag_offset).clamp(
@@ -198,7 +230,7 @@ func _process(delta: float) -> void:
 				facing_left = not facing_left  # turn around, walk back
 				state = State.RETURN
 		State.RETURN:
-			_patrol_step(delta, PATROL_SPEED * 1.4)
+			_patrol_step(delta, RETURN_SPEED)
 			if edge == 0 and absf(home_x - position.x) < 6.0:
 				position.x = home_x
 				facing_left = false
@@ -207,14 +239,22 @@ func _process(delta: float) -> void:
 		State.FALL:
 			fall_vel += GRAVITY * delta
 			position.y += fall_vel * delta
+			position.x = clampf(position.x + slide_vel * delta,
+					body_w() / 2, screen_w() - body_w() / 2)
+			slide_vel *= exp(-2.5 * delta)  # whip knockback air drag
 			if position.y >= floor_y():
 				position.y = floor_y()
-				state = State.IDLE
+				slide_vel = 0.0
 				idle_time = 0.0
 				spring_vel += clampf(-fall_vel / 250.0, -6.0, -2.0)  # land squish
 				for i in 3:
 					_spawn(&"dust", Vector2(randf_range(-1, 1) * body_w() * 0.5,
 							-4.0))
+				if absf(home_x - position.x) > 40.0:
+					facing_left = home_x < position.x
+					state = State.RETURN  # whipped away: walk back home
+				else:
+					state = State.IDLE
 		State.SLEEP:
 			if randf() < delta * 0.8:
 				_spawn(&"zzz", Vector2(body_w() * 0.3, -body_h() * 0.9))
@@ -242,6 +282,7 @@ func _update_cursor_tracking(delta: float) -> void:
 	var cur := global_cursor()
 	if delta > 0.0:
 		_cursor_vel = (cur - _prev_cursor) / delta
+		_cursor_speed = lerpf(_cursor_speed, _cursor_vel.length(), 0.5)
 	_prev_cursor = cur
 
 
@@ -269,27 +310,26 @@ func _update_blink(delta: float) -> void:
 		next_blink = randf_range(2.5, 6.0)
 
 
-func _check_petting(delta: float) -> void:
-	var cur := global_cursor()
-	var over := hit_rect().grow(6.0).has_point(cur)
-	var slow := _cursor_vel.length() < 700.0
-	if over and slow and not pressed and _cursor_vel.length() > 15.0:
-		pet_heat = minf(pet_heat + delta * 2.5, 1.5)
+## Java charge model: motion events set pet_fresh (see _unhandled_input);
+## while fresh, charge climbs to 2.0; petting is charge > 0.35.
+func _update_petting(delta: float) -> void:
+	pet_fresh = maxf(0.0, pet_fresh - delta)
+	if pet_fresh > 0.0 and not pressed:
+		pet_charge = minf(pet_charge + delta, 2.0)
 	else:
-		pet_heat = maxf(0.0, pet_heat - delta * 1.2)
-	if pet_heat > 0.5 and state == State.IDLE:
+		pet_charge = maxf(0.0, pet_charge - 2.0 * delta)
+	if pet_charge > 0.35 and state == State.IDLE:
 		state = State.PET
 
 
+## Java: smoothed speed > 2200 within 500 px of the eyes; alert only, no jump.
 func _check_startle() -> void:
-	var cur := global_cursor()
-	var to_pet := (position - Vector2(0, body_h() / 2)) - cur
-	var closing := _cursor_vel.dot(to_pet.normalized())
-	if to_pet.length() < 260.0 and closing > STARTLE_CURSOR_SPEED:
+	var eye := position - Vector2(0, body_h() * 0.6)
+	if _cursor_speed > STARTLE_CURSOR_SPEED \
+			and global_cursor().distance_to(eye) < STARTLE_RADIUS:
 		state = State.STARTLE
-		state_timer = 0.5
-		spring_vel += 5.0  # jump stretch
-		pet_heat = 0.0
+		state_timer = 0.8
+		pet_charge = 0.0
 		_spawn(&"alert", Vector2(0, -body_h() - 10))
 
 
@@ -303,6 +343,7 @@ func _enter_patrol() -> void:
 	state = State.PATROL
 	home_x = position.x
 	facing_left = randf() < 0.5
+	wander_in = randf_range(18.0, 40.0)  # Java re-roll
 
 
 ## Walks the screen perimeter: bottom → right → top → left, feet on the
@@ -354,6 +395,16 @@ func _cursor_near() -> bool:
 
 
 func _unhandled_input(event: InputEvent) -> void:
+	if event is InputEventMouseButton \
+			and event.button_index == MOUSE_BUTTON_MIDDLE and event.pressed \
+			and hit_rect().has_point(event.position):
+		chat_requested.emit()  # Java: middle-click opens the chat box
+		return
+	if event is InputEventMouseButton \
+			and event.button_index == MOUSE_BUTTON_RIGHT and event.pressed \
+			and hit_rect().has_point(event.position):
+		menu_requested.emit(event.position)
+		return
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
 		if event.pressed and hit_rect().has_point(event.position):
 			pressed = true
@@ -362,6 +413,7 @@ func _unhandled_input(event: InputEvent) -> void:
 			drag_offset = position - event.position
 			edge = 0
 			rotation = 0.0  # grabbing plucks the pet off whatever edge
+			wander_in = randf_range(18.0, 40.0)  # Java: grab resets wander
 		elif not event.pressed and pressed:
 			pressed = false
 			if state == State.DRAG:
@@ -374,11 +426,71 @@ func _unhandled_input(event: InputEvent) -> void:
 			elif press_time < CLICK_MAX_TIME:
 				_attack()
 			idle_time = 0.0
-	elif event is InputEventMouseMotion and pressed and state != State.DRAG:
-		if event.position.distance_to(press_pos) > CLICK_MAX_MOVE:
-			state = State.DRAG  # spring target 1.2 does the stretch
+	elif event is InputEventMouseMotion:
+		if pressed and state != State.DRAG:
+			if event.position.distance_to(press_pos) > CLICK_MAX_MOVE:
+				state = State.DRAG  # spring target 1.2 does the stretch
+		elif hit_rect().grow(4.0).has_point(event.position):
+			pet_fresh = 0.25  # Java: motion over the pet charges petting
 	if pressed and state != State.DRAG:
 		press_time += get_process_delta_time()
+
+
+## Chat/reminder text on the own bubble (plain, default style).
+func say_local(text: String) -> void:
+	own_bubble.show(text, Time.get_ticks_msec(), 1.0, 0, "")
+
+
+## Styled chat bubble from the net layer ({text, scale, effect, color_hex}).
+func show_own_bubble(parsed: Dictionary) -> void:
+	own_bubble.show(parsed.text, Time.get_ticks_msec(),
+			parsed.scale, parsed.effect, parsed.color_hex)
+
+
+## Shot by a peer: alert, KO overlay away from the shooter, spring slam.
+func react_to_shot(from_peer) -> void:
+	idle_time = 0.0
+	if state == State.SLEEP:
+		state = State.IDLE
+	ko_t = KO_TOTAL
+	ko_mode = randi() % 2
+	var from_x: float = position.x
+	if from_peer and from_peer.has_method("get"):
+		from_x = position.x - 100.0  # unknown geometry: topple right
+	ko_dir = 1.0 if from_x <= position.x else -1.0
+	spring_vel += -6.0
+	state = State.STARTLE
+	state_timer = 1.2
+	for i in 12:
+		_spawn(&"spark", Vector2(randf_range(-14, 14),
+				-body_h() * randf_range(0.3, 0.9)))
+
+
+## Muzzle flash when we shoot someone (net layer signal).
+func attack_flash() -> void:
+	_attack()
+
+
+## Whipped by a peer: launched sideways off the ground, tumbles, lands and
+## walks back home.
+func react_to_whip() -> void:
+	idle_time = 0.0
+	if state == State.SLEEP:
+		state = State.IDLE
+	ko_t = KO_TOTAL
+	ko_mode = 0  # always topple while flying
+	ko_dir = 1.0 if randf() < 0.5 else -1.0
+	home_x = position.x
+	slide_vel = ko_dir * 900.0
+	fall_vel = -520.0
+	position.y -= 2.0
+	edge = 0
+	rotation = 0.0
+	state = State.FALL
+	spring_vel -= 5.0
+	for i in 6:
+		_spawn(&"spark", Vector2(randf_range(-14, 14),
+				-body_h() * randf_range(0.3, 0.9)))
 
 
 ## Click attack, flavored per skin like the Java app: squirtle water-gun,
@@ -458,6 +570,25 @@ func _draw() -> void:
 	# Java petting: whole-body x jitter, eyes unchanged (spec §3.2).
 	var shake := sin(t * 45.0) * 0.25 if state == State.PET else 0.0
 
+	# KO overlay (spec §6): topple 90° away from the shooter, or pancake.
+	if ko_t > 0.0:
+		var e := KO_TOTAL - ko_t
+		if ko_mode == 0:
+			var rot := 90.0
+			if e < 0.25:
+				rot = 90.0 * (e / 0.25)
+			elif e >= 1.1:
+				rot = 90.0 * (1.0 - (e - 1.1) / 0.5)
+			waddle += rot * ko_dir
+		else:
+			var squish := 0.25
+			if e < 0.15:
+				squish = 1.0 - 0.75 * (e / 0.15)
+			elif e >= 1.0:
+				squish = 0.25 + 0.75 * minf(1.0, (e - 1.0) / 0.6)
+			scale_y *= squish
+			scale_x *= 1.0 + (1.0 - squish) * 0.6
+
 	draw_set_transform(Vector2(0, -bob * px()), deg_to_rad(waddle) * flip,
 			Vector2(px() * scale_x * flip, px() * scale_y))
 
@@ -486,6 +617,11 @@ func _draw() -> void:
 
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 	_draw_particles()
+
+	var now := Time.get_ticks_msec()
+	if own_bubble.is_active(now):
+		Bubbles.draw(self, ThemeDB.fallback_font, 16, own_bubble,
+				Vector2(0, -body_h() - 6.0), own_bubble.alpha(now))
 
 
 ## Faithful port of drawOpenEye/drawClosedEye + gaze math
@@ -558,7 +694,8 @@ func _draw_eyes(shake: float) -> void:
 func _draw_particles() -> void:
 	var s := px()
 	for p in particles:
-		var a: float = clampf(1.0 - p.life / p.max, 0.0, 1.0)
+		# Java fade: trailing 0.5 s ramp, not proportional to lifetime.
+		var a: float = clampf((p.max - p.life) / 0.5, 0.0, 1.0)
 		var pos: Vector2 = p.pos
 		if p.kind == &"dust":
 			draw_circle(pos, 2.5 * (1.0 + p.life),

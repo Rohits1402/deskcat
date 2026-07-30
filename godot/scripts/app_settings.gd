@@ -18,7 +18,8 @@ const SKINS: PackedStringArray = ["squirtle", "pikachu", "cat"]
 
 ## Java scales: Small 3 / Normal 4 / Large 5 px per art pixel.
 ## size_factor() maps size_index onto Pet.size_factor.
-const SIZE_FACTORS: Array[float] = [1.0, 4.0 / 3.0, 5.0 / 3.0]
+## Java tray scales are 3 / 5 / 7 px per art pixel (PX_BASE 3 = factor 1).
+const SIZE_FACTORS: Array[float] = [1.0, 5.0 / 3.0, 7.0 / 3.0]
 
 const RUN_KEY := "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run"
 const RUN_VALUE := "DeskCat"

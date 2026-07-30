@@ -75,7 +75,8 @@ static func draw(ci: CanvasItem, font: Font, base_size: int,
 	# Same line cap the Java client used for big scales.
 	var max_lines := 2 if scale >= 2.0 else (3 if scale > 1.2 else MAX_LINES)
 	var max_text_w := clampf(vp.x * 0.4, 200.0, 640.0)
-	var lines := wrap(font, fs, bubble.text(), max_text_w, max_lines)
+	# Qualified: a bare wrap() resolves to the global math utility function.
+	var lines := Bubbles.wrap(font, fs, bubble.text(), max_text_w, max_lines)
 
 	var line_h := font.get_height(fs)
 	var tw := 0.0
