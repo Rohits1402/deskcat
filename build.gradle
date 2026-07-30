@@ -47,11 +47,11 @@ test {
 // version must stay in sync with CatApp.VERSION (release process in CLAUDE.md)
 tasks.register('fatJar', Jar) {
     archiveBaseName = 'deskcat'
-    archiveVersion = '1.2.0'
+    archiveVersion = '1.2.1'
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
     manifest {
         attributes 'Main-Class': 'com.deskcat.DesktopLauncher',
-                   'Implementation-Version': '1.2.0'
+                   'Implementation-Version': '1.2.1'
     }
     from sourceSets.main.output
     from {
