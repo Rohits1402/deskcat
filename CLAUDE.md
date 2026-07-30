@@ -48,8 +48,14 @@ Key mechanics that span the codebase:
   (via `reg.exe`). Never add anything beyond those. Reminder/sound settings
   are deliberately session-only — do not add a config file.
 - Sounds are synthesized PCM in
-  [SoundFx.java](src/main/java/com/deskcat/SoundFx.java) (no audio assets);
-  each play opens a short-lived `AudioDevice` on a daemon thread.
+  [SoundFx.java](src/main/java/com/deskcat/SoundFx.java); each play opens a
+  short-lived `AudioDevice` on a daemon thread. The ONE bundled audio asset is
+  `src/main/resources/sfx/meow.ogg`, a **CC0 / public-domain** cat recording
+  from [BigSoundBank](https://bigsoundbank.com/meow-cat-12-s1900.html) (sound
+  #1900), loaded via `Gdx.files.internal` with the synthesized meow as
+  fallback. Any future audio asset must be CC0 or equivalently free —
+  Pokémon cries are copyrighted (Nintendo / Game Freak / Creatures) and must
+  never be bundled; the Pikachu and Squirtle voices stay original synthesis.
 - [SystemAudio.java](src/main/java/com/deskcat/SystemAudio.java) spawns one
   PowerShell helper subprocess (inline C# via Add-Type, `-EncodedCommand`,
   nothing on disk) that streams the Core Audio output PEAK LEVEL — one float

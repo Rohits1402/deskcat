@@ -290,6 +290,32 @@ On `feature/wrap-fade-chat`:
 - Tests grow to 32 (wrap: single-line, word breaks, hard split, line cap +
   ellipsis, empty text).
 
+## 19. Cat scratch, per-skin voices, volume flyout
+
+- **Cat click attack**: the tabby no longer just startles — it slaps a paw
+  out toward whichever side the cursor is on, twice over 0.6 s, with claw
+  marks fading in at full reach, a lunge that carries the whole sprite, and
+  its eyes tracking the swinging paw. Yields to dragging, patrol, kneading
+  and reminders like the other attacks.
+- **Per-skin voices**: the cat plays a real **CC0 / public-domain** meow
+  ([BigSoundBank #1900](https://bigsoundbank.com/meow-cat-12-s1900.html),
+  59 KB OGG at `src/main/resources/sfx/meow.ogg`) — the project's first
+  bundled asset — with the synthesized meow as fallback if the resource is
+  missing. That synthesized version follows published meow acoustics
+  (~0.55 s, f0 rising to ~700 Hz then falling, two moving formants sliding
+  nasal → "ee" → "ah" → "ow", light vibrato).
+- Pikachu and Squirtle get **original synthesized cries** — a two-syllable
+  "pi-ka" chirp with an electric crackle tail, and a warbling watery squeak
+  ending in a bubble. Their real cries are copyrighted (Nintendo / Game
+  Freak / Creatures) and are deliberately never bundled; no CC0 version of
+  them exists to license. The old standalone zap was folded into the pika
+  cry; the splash moved to the water reminder.
+- **Volume flyout**: tray *Sound* now opens a bare Windows-style slider next
+  to the cursor (`VolumePopup`) — drag to set 0–100% live, no preview sound,
+  closes on focus loss or Escape. `SoundFx.enabled` was dropped entirely:
+  volume is the single control and 0 is silence. Session-only, like the
+  reminders.
+
 ## Current state
 
 - **Skins**: Squirtle (default, procedural), Pikachu (character maps), and
@@ -297,8 +323,9 @@ On `feature/wrap-fade-chat`:
   or at launch via `gradle run --args="pikachu"` etc.
 - **Behaviors**: eye tracking, blink, tail animation, mochi drag, petting
   hearts, keyboard kneading, startle, click attacks (water gun /
-  thunderbolt / startle), endless bottom-edge patrol with return-home, sleep,
-  tray menu (skin switcher + size + taskbar gap + quit), no taskbar button.
+  thunderbolt / paw swipe) each with their own voice, endless bottom-edge
+  patrol with return-home, sleep, tray menu (skin switcher + size + taskbar
+  gap + volume + quit), no taskbar button.
 - **LAN** (branch `feature/lan-presence`): peer discovery, remote pet
   windows with names, broadcast + DM chat with bubbles, right-click menus,
   hide-behind-taskbar, size control, unit tests, fat jar.

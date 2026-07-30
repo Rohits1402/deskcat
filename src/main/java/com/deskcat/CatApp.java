@@ -164,6 +164,10 @@ public class CatApp extends ApplicationAdapter {
     // 2 = water gun (squirtle)
     private int attackType;
     private float boltLeft;
+    /** Cat swipe: two paw slaps toward the cursor side. */
+    private static final float SCRATCH_DUR = 0.6f;
+    private float scratchLeft;
+    private int scratchDir = 1;
     private final ArrayList<float[]> bolts = new ArrayList<float[]>();
     private float waterLeft, dropIn;
 
@@ -604,6 +608,7 @@ public class CatApp extends ApplicationAdapter {
         // drop any in-flight attack so it doesn't straddle two skins
         boltLeft = 0f;
         waterLeft = 0f;
+        scratchLeft = 0f;
         alertLeft = 0f;
         if (trayIcon != null) {
             trayIcon.setToolTip("DeskCat - " + skin);
@@ -744,8 +749,8 @@ public class CatApp extends ApplicationAdapter {
             remindMenu.add(waterItem);
             menu.add(remindMenu);
 
-            final CheckboxMenuItem soundItem = new CheckboxMenuItem("Sound", true);
-            soundItem.addItemListener(e -> SoundFx.enabled = soundItem.getState());
+            MenuItem soundItem = new MenuItem("Sound");
+            soundItem.addActionListener(e -> VolumePopup.show());
             menu.add(soundItem);
 
             final CheckboxMenuItem startupItem = new CheckboxMenuItem(
@@ -920,16 +925,20 @@ public class CatApp extends ApplicationAdapter {
 
     private void attack() {
         if (attackType == 0) {
-            alertLeft = 0.8f;    // the tabby just gets startled by pokes
-            SoundFx.chirp();
+            // the tabby slaps a paw out toward whichever side the cursor is on
+            wake();
+            scratchLeft = SCRATCH_DUR;
+            scratchDir = gazeX < 0f ? -1 : 1;
+            squash.kick(2.5f);
+            SoundFx.meow();
             return;
         }
         wake();
         squash.kick(5f);          // excited hop
         if (attackType == 1) {
-            SoundFx.zap();
+            SoundFx.pikaCry();
         } else {
-            SoundFx.splash();
+            SoundFx.squirtleCry();
         }
         if (attackType == 1) {
             boltLeft = 0.7f;
@@ -1049,6 +1058,7 @@ public class CatApp extends ApplicationAdapter {
     private void updateMood(float dt) {
         alertLeft -= dt;
         boltLeft -= dt;
+        scratchLeft -= dt;
         waterLeft -= dt;
         typingLeft -= dt;
         koT -= dt;
@@ -1080,7 +1090,7 @@ public class CatApp extends ApplicationAdapter {
                     beginReturn();
                 }
                 notifyTray("Water break", "Time to drink some water.");
-                SoundFx.chirp();
+                SoundFx.splash();
             }
         }
         float sysPeak = SystemAudio.peak();
@@ -1099,7 +1109,7 @@ public class CatApp extends ApplicationAdapter {
         }
         danceNow = musicOn && !sleeping && !dragging && wanderState == 0
                 && boltLeft <= 0f && waterLeft <= 0f && stretchLeft <= 0f
-                && !kneadNow;
+                && scratchLeft <= 0f && !kneadNow;
         if (danceNow) {
             noteIn -= dt;
             if (noteIn <= 0f) {
@@ -1160,7 +1170,8 @@ public class CatApp extends ApplicationAdapter {
             wake();
         }
         kneadNow = typingLeft > 0f && !dragging && wanderState == 0
-                && boltLeft <= 0f && waterLeft <= 0f && !sleeping;
+                && boltLeft <= 0f && waterLeft <= 0f && scratchLeft <= 0f
+                && !sleeping;
 
         petFresh -= dt;
         if (petFresh > 0f) {
@@ -1216,8 +1227,9 @@ public class CatApp extends ApplicationAdapter {
         if (wanderState == 0) {
             boolean eligible = !sleeping && !dragging && !pressed && !petActive
                     && !hidden && boltLeft <= 0f && waterLeft <= 0f
-                    && typingLeft <= 0f && stretchLeft <= 0f
-                    && waterRemindLeft <= 0f && idleTime > 3f;
+                    && scratchLeft <= 0f && typingLeft <= 0f
+                    && stretchLeft <= 0f && waterRemindLeft <= 0f
+                    && idleTime > 3f;
             if (eligible) {
                 wanderIn -= dt;
                 if (wanderIn <= 0f) {
@@ -1361,6 +1373,9 @@ public class CatApp extends ApplicationAdapter {
         batch.begin();
 
         float shake = petActive ? MathUtils.sin(time * 45f) * 0.25f : 0f;
+        if (scratchLeft > 0f) {
+            shake += scratchExt() * 1.5f * scratchDir;   // lean into the swipe
+        }
 
         Texture tail = tailTex[TAIL_CYCLE[tailFrame]];
         batch.draw(tail, tailX + shake, 0, tail.getWidth(), tail.getHeight());
@@ -1383,6 +1398,9 @@ public class CatApp extends ApplicationAdapter {
             drawClosedEye(eyeRX + shake);
         } else {
             int pgx = gazeX > 0.3f ? 1 : (gazeX < -0.3f ? -1 : 0);
+            if (scratchLeft > 0f) {
+                pgx = scratchDir;   // watch the paw it's swinging
+            }
             if ((wanderState == 2 || wanderState == 3) && facingLeft) {
                 pgx = -pgx;   // the whole FBO is mirrored while walking left
             }
@@ -1397,8 +1415,37 @@ public class CatApp extends ApplicationAdapter {
             batch.draw(pawTex, 18 + shake, leftUp ? 0 : 1, 4, 4);
         }
 
+        if (scratchLeft > 0f) {
+            drawScratch(shake);
+        }
+
         batch.end();
         fbo.end();
+    }
+
+    /** 0 at rest, 1 at full reach; two swipes over SCRATCH_DUR. */
+    private float scratchExt() {
+        float phase = (SCRATCH_DUR - scratchLeft) / (SCRATCH_DUR / 2f);
+        return MathUtils.sin((phase - (int) phase) * MathUtils.PI);
+    }
+
+    /** One paw thrust out to the cursor side, claw marks at full reach. */
+    private void drawScratch(float shake) {
+        float ext = scratchExt();
+        float pawX = eyeCenterX - 2f + scratchDir * (6f + ext * 7f) + shake;
+        float pawY = 4f + ext * 1.5f;
+        batch.draw(pawTex, pawX, pawY, 4, 4);
+        if (ext > 0.55f) {
+            batch.setColor(1f, 1f, 1f, (ext - 0.55f) / 0.45f);
+            float clawX = pawX + (scratchDir > 0 ? 4.5f : -1.5f);
+            for (int i = 0; i < 3; i++) {
+                for (int j = 0; j < 3; j++) {
+                    batch.draw(px, clawX + (i * 2f + j * 0.7f) * scratchDir,
+                            pawY + 3.5f - j - i * 0.4f, 1f, 1f);
+                }
+            }
+            batch.setColor(Color.WHITE);
+        }
     }
 
     private void drawOpenEye(float eyeX, int pgx, int irisY) {
@@ -1573,6 +1620,7 @@ public class CatApp extends ApplicationAdapter {
             }
         }
         SystemAudio.stop();
+        SoundFx.dispose();
         try {
             GlobalScreen.unregisterNativeHook();
         } catch (Throwable ignored) {

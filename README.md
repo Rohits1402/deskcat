@@ -25,8 +25,10 @@ taskbar-free window and reacts to what you do — inspired by desktop pets like
   the pet rises into a long tall stretch so you stretch along; every 45
   minutes it hops and fountains water droplets to remind you to drink.
   Both come with a tray notification and a chirp.
-- **Sound effects** — a zap, a splash, and a mew-like chirp, all
-  synthesized in code (no audio files); mute from the tray.
+- **Voices and sound effects** — each skin has its own voice: a real
+  public-domain (CC0) meow for the cat, and synthesized cries for Pikachu
+  and Squirtle, plus chirp/splash effects. Tray → Sound opens a volume
+  slider (0% is silence).
 - **Grooves to your music** — when the system is playing audio, the pet
   bobs and sways with the actual loudness, its tail wags double-time, and
   musical notes float up. Detection reads only the output peak level (a
