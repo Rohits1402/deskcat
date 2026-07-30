@@ -1,0 +1,8 @@
+# Godot cache
+.godot/
+
+# native build output + toolchain checkouts (built per-machine, see native/README.md)
+bin/
+native/godot-cpp/
+native/.sconsign.dblite
+native/*.obj
