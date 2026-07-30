@@ -4,5 +4,7 @@
 # native build output + toolchain checkouts (built per-machine, see native/README.md)
 bin/
 native/godot-cpp/
+native/extension_api.json
 native/.sconsign.dblite
 native/*.obj
+native/src/*.obj

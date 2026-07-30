@@ -23,6 +23,11 @@ var t := 0.0
 var idle_time := 0.0
 var facing_left := false
 
+## Patrol travels the whole screen perimeter: 0 bottom, 1 right, 2 top,
+## 3 left. The pet rotates to stand on each edge (feet on the edge).
+var edge := 0
+const EDGE_ROT := [0.0, -PI / 2, PI, PI / 2]
+
 # --- interaction bookkeeping -------------------------------------------------
 var drag_offset := Vector2.ZERO
 var press_time := 0.0
@@ -63,9 +68,19 @@ func body_h() -> float:
 	return skin.body_size.y * px()
 
 
+## Inward normal of the edge the pet stands on (points into the screen).
+func edge_normal() -> Vector2:
+	return [Vector2.UP, Vector2.LEFT, Vector2.DOWN, Vector2.RIGHT][edge]
+
+
 func hit_rect() -> Rect2:
-	return Rect2(position - Vector2(body_w() / 2, body_h()),
-			Vector2(body_w(), body_h()))
+	if edge == 0:
+		return Rect2(position - Vector2(body_w() / 2, body_h()),
+				Vector2(body_w(), body_h()))
+	# On other edges the body is rotated — use a square around its center.
+	var center := position + edge_normal() * body_h() / 2
+	var half := maxf(body_w(), body_h()) / 2
+	return Rect2(center - Vector2(half, half), Vector2(half, half) * 2)
 
 
 func dragging() -> bool:
@@ -80,9 +95,11 @@ func global_cursor() -> Vector2:
 
 
 ## The pet stands on the work-area bottom (taskbar top), even though the
-## overlay window covers the whole screen.
+## overlay window covers the whole screen. Window-local coords.
 func floor_y() -> float:
-	return float(DisplayServer.screen_get_usable_rect().end.y)
+	var s := DisplayServer.SCREEN_PRIMARY
+	return float(DisplayServer.screen_get_usable_rect(s).end.y
+			- DisplayServer.screen_get_position(s).y)
 
 
 func screen_w() -> float:
@@ -148,20 +165,20 @@ func _process(delta: float) -> void:
 			if knead_left <= 0.0:
 				state = State.IDLE
 		State.PATROL:
-			_walk(delta)
-			_wrap_around()
+			_patrol_step(delta, PATROL_SPEED)
+			if fmod(t, 0.4) < delta:
+				_spawn(&"dust", Vector2(
+						(1.0 if facing_left else -1.0) * body_w() * 0.4, -4.0))
 			if keys > 0 or _cursor_near():
+				facing_left = not facing_left  # turn around, walk back
 				state = State.RETURN
 		State.RETURN:
-			var dx := home_x - position.x
-			if absf(dx) < 4.0:
+			_patrol_step(delta, PATROL_SPEED * 1.4)
+			if edge == 0 and absf(home_x - position.x) < 6.0:
 				position.x = home_x
 				facing_left = false
 				state = State.IDLE
 				idle_time = 0.0
-			else:
-				facing_left = dx < 0
-				position.x += signf(dx) * PATROL_SPEED * 1.4 * delta
 		State.SLEEP:
 			if randf() < delta * 0.8:
 				_spawn(&"zzz", Vector2(body_w() * 0.3, -body_h() * 0.9))
@@ -231,19 +248,47 @@ func _enter_patrol() -> void:
 	facing_left = randf() < 0.5
 
 
-func _walk(delta: float) -> void:
-	var dir := -1.0 if facing_left else 1.0
-	position.x += dir * PATROL_SPEED * delta
-	if fmod(t, 0.4) < delta:
-		_spawn(&"dust", Vector2(-dir * body_w() * 0.4, -4.0))
-
-
-func _wrap_around() -> void:
+## Walks the screen perimeter: bottom → right → top → left, feet on the
+## edge (node rotation), clockwise when facing right, ccw when facing left.
+func _patrol_step(delta: float, speed: float) -> void:
+	var d := speed * delta
 	var w := screen_w()
-	if position.x < -body_w() / 2:
-		position.x = w + body_w() / 2
-	elif position.x > w + body_w() / 2:
-		position.x = -body_w() / 2
+	var fy := floor_y()
+	var cw := not facing_left
+	match edge:
+		0:  # bottom
+			position = Vector2(position.x + (d if cw else -d), fy)
+			if cw and position.x >= w:
+				edge = 1
+				position.x = w
+			elif not cw and position.x <= 0:
+				edge = 3
+				position.x = 0
+		1:  # right edge; clockwise climbs up
+			position = Vector2(w, position.y + (-d if cw else d))
+			if cw and position.y <= 0:
+				edge = 2
+				position.y = 0
+			elif not cw and position.y >= fy:
+				edge = 0
+				position.y = fy
+		2:  # top; clockwise walks left (hanging upside down)
+			position = Vector2(position.x + (-d if cw else d), 0)
+			if cw and position.x <= 0:
+				edge = 3
+				position.x = 0
+			elif not cw and position.x >= w:
+				edge = 1
+				position.x = w
+		3:  # left edge; clockwise climbs down
+			position = Vector2(0, position.y + (d if cw else -d))
+			if cw and position.y >= fy:
+				edge = 0
+				position.y = fy
+			elif not cw and position.y <= 0:
+				edge = 2
+				position.y = 0
+	rotation = EDGE_ROT[edge]
 
 
 func _cursor_near() -> bool:
@@ -258,6 +303,8 @@ func _unhandled_input(event: InputEvent) -> void:
 			press_time = 0.0
 			press_pos = event.position
 			drag_offset = position - event.position
+			edge = 0
+			rotation = 0.0  # grabbing plucks the pet off whatever edge
 		elif not event.pressed and pressed:
 			pressed = false
 			if state == State.DRAG:

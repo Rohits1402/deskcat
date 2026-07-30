@@ -34,18 +34,26 @@ func _ready() -> void:
 	_setup_overlay_window()
 	NativeBridge.hide_from_taskbar(WINDOW_ID)
 	_setup_tray()
-	# Window origin == screen origin, so screen coords map 1:1 to local.
-	var usable := DisplayServer.screen_get_usable_rect()
-	pet.position = Vector2(usable.end.x - 220, usable.end.y)
+	# Pet coords are window-LOCAL: subtract the screen origin (non-zero on
+	# multi-monitor setups where the primary isn't the leftmost screen).
+	var origin := DisplayServer.screen_get_position(DisplayServer.SCREEN_PRIMARY)
+	var usable := DisplayServer.screen_get_usable_rect(DisplayServer.SCREEN_PRIMARY)
+	pet.position = Vector2(usable.end - origin) - Vector2(220, 0)
 
 
 func _setup_overlay_window() -> void:
-	# Cover the FULL screen (not just the work area) so particles/pellets can
-	# fly over the taskbar instead of cutting off at the window edge. The
-	# pet's floor is still the work-area bottom (see Pet.floor_y()).
-	DisplayServer.window_set_size(DisplayServer.screen_get_size(), WINDOW_ID)
+	# Cover the FULL primary screen (not just the work area) so particles/
+	# pellets can fly over the taskbar instead of cutting off at the window
+	# edge. The pet's floor is still the work-area bottom (see Pet.floor_y()).
+	# Explicit SCREEN_PRIMARY: with multiple monitors the window otherwise
+	# opens on whichever screen the OS picks, while our coords assume primary.
+	# +1 px height: a borderless window EXACTLY the screen size gets promoted
+	# to fullscreen-optimized by Windows, which kills per-pixel transparency.
+	var s := DisplayServer.SCREEN_PRIMARY
 	DisplayServer.window_set_position(
-			DisplayServer.screen_get_position(), WINDOW_ID)
+			DisplayServer.screen_get_position(s), WINDOW_ID)
+	DisplayServer.window_set_size(
+			DisplayServer.screen_get_size(s) + Vector2i(0, 1), WINDOW_ID)
 	DisplayServer.window_set_flag(
 			DisplayServer.WINDOW_FLAG_ALWAYS_ON_TOP, true, WINDOW_ID)
 	DisplayServer.window_set_flag(
@@ -106,8 +114,9 @@ func _toggle_pet3d(on: bool) -> void:
 	var script: GDScript = load("res://scripts/pet3d_view.gd")
 	_pet3d = script.new()
 	add_child(_pet3d)
-	var usable := DisplayServer.screen_get_usable_rect()
-	_pet3d.position = Vector2(usable.size.x - 480, usable.size.y - 260)
+	var origin := DisplayServer.screen_get_position(DisplayServer.SCREEN_PRIMARY)
+	var usable := DisplayServer.screen_get_usable_rect(DisplayServer.SCREEN_PRIMARY)
+	_pet3d.position = Vector2(usable.end - origin) - Vector2(480, 260)
 
 
 func _tray_icon() -> Texture2D:

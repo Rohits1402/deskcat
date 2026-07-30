@@ -12,17 +12,23 @@ The GDScript app runs without the DLL — `NativeBridge` no-ops everything.
 
 ## Build (once per machine)
 
-1. Install **VS Build Tools** with the *Desktop development with C++* workload.
+1. Install **VS Build Tools** with the *Desktop development with C++* workload
+   (`winget install Microsoft.VisualStudio.2022.BuildTools` with the VCTools
+   workload).
 2. `pip install scons`
-3. ```
-   cd godot/native
-   git clone -b 4.7 --depth 1 https://github.com/godotengine/godot-cpp
-   scons platform=windows target=template_release
-   scons platform=windows target=template_debug   # for running in the editor
+3. godot-cpp's release branches stop at 4.5 — for newer engines use master
+   plus the API description dumped from the exact engine binary:
    ```
+   cd godot/native
+   git clone --depth 1 https://github.com/godotengine/godot-cpp
+   <godot_console.exe> --headless --dump-extension-api
+   scons platform=windows target=template_debug   custom_api_file=extension_api.json
+   scons platform=windows target=template_release custom_api_file=extension_api.json
+   ```
+   (debug is what the editor / non-exported runs load; release ships)
 4. Output lands in `godot/bin/win64/`; `deskcat_native.gdextension` picks it up
-   on next launch. `godot-cpp/` and `bin/` are gitignored — every dev builds
-   locally; release DLLs are produced by whoever cuts the release.
+   on next launch. `godot-cpp/`, `extension_api.json` and `bin/` are
+   gitignored — every dev builds locally; release DLLs are produced by
+   whoever cuts the release.
 
-The godot-cpp branch must match the engine minor version (4.7). When the
-engine is upgraded, re-clone the matching branch and rebuild.
+When the engine is upgraded, re-dump the API json and rebuild.
