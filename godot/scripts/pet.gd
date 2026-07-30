@@ -79,8 +79,14 @@ func global_cursor() -> Vector2:
 			- DisplayServer.window_get_position(0))
 
 
-func usable_size() -> Vector2:
-	return Vector2(DisplayServer.screen_get_usable_rect().size)
+## The pet stands on the work-area bottom (taskbar top), even though the
+## overlay window covers the whole screen.
+func floor_y() -> float:
+	return float(DisplayServer.screen_get_usable_rect().end.y)
+
+
+func screen_w() -> float:
+	return float(DisplayServer.window_get_size(0).x)
 
 
 func _ready() -> void:
@@ -128,7 +134,7 @@ func _process(delta: float) -> void:
 			var mouse := get_viewport().get_mouse_position()
 			position = (mouse + drag_offset).clamp(
 					Vector2(body_w() / 2, body_h()),
-					usable_size() - Vector2(body_w() / 2, 0))
+					Vector2(screen_w() - body_w() / 2, floor_y()))
 			home_x = position.x
 		State.STARTLE, State.ATTACK:
 			state_timer -= delta
@@ -233,7 +239,7 @@ func _walk(delta: float) -> void:
 
 
 func _wrap_around() -> void:
-	var w := usable_size().x
+	var w := screen_w()
 	if position.x < -body_w() / 2:
 		position.x = w + body_w() / 2
 	elif position.x > w + body_w() / 2:
@@ -385,20 +391,25 @@ func _draw_eyes(bw: float, bh: float) -> void:
 			draw_rect(Rect2(r.position + Vector2(r.size.x - 1, 0),
 					Vector2(1, 2)), dark)
 		else:
-			var grow := 1.0 if state == State.STARTLE else 0.0
+			# Iris rides the gaze but always stays inside the white.
 			match skin.eye_style:
 				PetSkin.EYE_SOLID_BEAD:
-					draw_rect(r.grow(grow), dark)
-					draw_rect(Rect2(r.position + Vector2(look.x * 0.5, 0),
+					draw_rect(r, dark)
+					draw_rect(Rect2(r.position + Vector2(
+							clampf(1.0 + look.x, 0.0, r.size.x - 1.0), 0),
 							Vector2.ONE), Color.WHITE)
 				PetSkin.EYE_OUTLINED_BLOCK:
-					draw_rect(r.grow(grow + 1.0), dark)
-					draw_rect(r.grow(grow), Color.WHITE)
-					draw_rect(Rect2(r.position + look + Vector2(0, 1),
-							Vector2(1, r.size.y - 2)), skin.iris_color)
+					draw_rect(r.grow(1.0), dark)
+					draw_rect(r, Color.WHITE)
+					draw_rect(Rect2(r.position + Vector2(
+							clampf(1.0 + look.x, 0.0, r.size.x - 1.0),
+							clampf(1.0 + look.y, 0.0, r.size.y - 2.0)),
+							Vector2(1, 2)), skin.iris_color)
 				_:
-					draw_rect(r.grow(grow), Color.WHITE)
-					draw_rect(Rect2(r.position + look,
+					draw_rect(r, Color.WHITE)
+					draw_rect(Rect2(r.position + Vector2(
+							clampf(1.0 + look.x, 0.0, r.size.x - 2.0),
+							clampf(look.y * 0.5, 0.0, 1.0)),
 							Vector2(2, r.size.y - 1)), skin.iris_color)
 
 

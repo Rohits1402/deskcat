@@ -34,15 +34,18 @@ func _ready() -> void:
 	_setup_overlay_window()
 	NativeBridge.hide_from_taskbar(WINDOW_ID)
 	_setup_tray()
+	# Window origin == screen origin, so screen coords map 1:1 to local.
 	var usable := DisplayServer.screen_get_usable_rect()
-	# Window origin == usable-rect origin, so local coords map 1:1 to it.
-	pet.position = Vector2(usable.size.x - 220, usable.size.y)
+	pet.position = Vector2(usable.end.x - 220, usable.end.y)
 
 
 func _setup_overlay_window() -> void:
-	var usable := DisplayServer.screen_get_usable_rect()
-	DisplayServer.window_set_size(usable.size, WINDOW_ID)
-	DisplayServer.window_set_position(usable.position, WINDOW_ID)
+	# Cover the FULL screen (not just the work area) so particles/pellets can
+	# fly over the taskbar instead of cutting off at the window edge. The
+	# pet's floor is still the work-area bottom (see Pet.floor_y()).
+	DisplayServer.window_set_size(DisplayServer.screen_get_size(), WINDOW_ID)
+	DisplayServer.window_set_position(
+			DisplayServer.screen_get_position(), WINDOW_ID)
 	DisplayServer.window_set_flag(
 			DisplayServer.WINDOW_FLAG_ALWAYS_ON_TOP, true, WINDOW_ID)
 	DisplayServer.window_set_flag(
