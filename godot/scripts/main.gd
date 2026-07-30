@@ -1,24 +1,33 @@
-## Phase-1 spike: one screen-sized transparent always-on-top overlay window.
-## Everything (pet, later: peers/bubbles/pellets) lives inside it as Node2Ds.
+## One screen-sized transparent always-on-top overlay window. Everything
+## (pet, later: peers/bubbles/pellets) lives inside it as Node2Ds.
 ## Click-through everywhere EXCEPT over interactive sprites, via
 ## DisplayServer.window_set_mouse_passthrough (rebuilt every frame).
 extends Node2D
 
 const WINDOW_ID := 0
 
+## Passthrough rects are grown by this margin so a fast cursor can't outrun
+## the once-per-frame polygon update and leak clicks to the window below.
+const HIT_MARGIN := 28.0
+
 @onready var pet: Node2D = $Pet
 
 var _tray: StatusIndicator
+var _pet3d: Node = null
 var _last_polygon := PackedVector2Array()
 
 
 func _ready() -> void:
+	# Fully transparent clear color — anything else leaves ghost outlines
+	# smeared behind moving sprites on the transparent framebuffer.
+	get_viewport().transparent_bg = true
+	RenderingServer.set_default_clear_color(Color(0, 0, 0, 0))
 	_setup_overlay_window()
 	NativeBridge.hide_from_taskbar(WINDOW_ID)
 	_setup_tray()
 	var usable := DisplayServer.screen_get_usable_rect()
 	# Window origin == usable-rect origin, so local coords map 1:1 to it.
-	pet.position = Vector2(usable.size.x - 220, usable.size.y - 40)
+	pet.position = Vector2(usable.size.x - 220, usable.size.y)
 
 
 func _setup_overlay_window() -> void:
@@ -37,12 +46,50 @@ func _setup_tray() -> void:
 	_tray.tooltip = "DeskCat (Godot)"
 	var menu := PopupMenu.new()
 	add_child(menu)
+	menu.add_radio_check_item("Size: Small", 10)
+	menu.add_radio_check_item("Size: Normal", 11)
+	menu.add_radio_check_item("Size: Large", 12)
+	menu.set_item_checked(menu.get_item_index(10), true)
+	menu.add_separator()
+	menu.add_check_item("3D test pet", 20)
+	menu.add_separator()
 	menu.add_item("Quit", 0)
-	menu.id_pressed.connect(func(id: int) -> void:
-		if id == 0:
-			get_tree().quit())
+	menu.id_pressed.connect(_on_tray)
 	add_child(_tray)
 	_tray.menu = menu.get_path()
+
+
+func _on_tray(id: int) -> void:
+	var menu: PopupMenu = _tray.get_node(_tray.menu)
+	match id:
+		0:
+			get_tree().quit()
+		10, 11, 12:
+			pet.size_factor = [1.0, 1.35, 1.7][id - 10]
+			for item_id in [10, 11, 12]:
+				menu.set_item_checked(menu.get_item_index(item_id),
+						item_id == id)
+		20:
+			var idx := menu.get_item_index(20)
+			var on := not menu.is_item_checked(idx)
+			menu.set_item_checked(idx, on)
+			_toggle_pet3d(on)
+
+
+## Proof-of-concept 3D pet: a SubViewport with transparent background
+## composited into the overlay — the pipeline real 3D characters
+## (e.g. Kenney CC0 GLBs) will use.
+func _toggle_pet3d(on: bool) -> void:
+	if not on:
+		if _pet3d:
+			_pet3d.queue_free()
+			_pet3d = null
+		return
+	var script: GDScript = load("res://scripts/pet3d_view.gd")
+	_pet3d = script.new()
+	add_child(_pet3d)
+	var usable := DisplayServer.screen_get_usable_rect()
+	_pet3d.position = Vector2(usable.size.x - 480, usable.size.y - 260)
 
 
 func _tray_icon() -> Texture2D:
@@ -64,17 +111,26 @@ func _process(_delta: float) -> void:
 	_update_passthrough()
 
 
-## The overlay must swallow clicks ONLY over the pet; the rest of the screen
-## belongs to whatever is underneath. One polygon per window — disjoint
-## regions (later: peers, bubbles) get stitched with zero-width bridges.
+## The overlay must swallow clicks ONLY over interactive sprites; the rest
+## of the screen belongs to whatever is underneath. One polygon per window —
+## while dragging, the whole overlay turns interactive so fast cursor moves
+## can't escape the region and drop clicks through mid-drag.
 func _update_passthrough() -> void:
-	var r: Rect2 = pet.hit_rect()
-	var poly := PackedVector2Array([
-		r.position,
-		r.position + Vector2(r.size.x, 0),
-		r.end,
-		r.position + Vector2(0, r.size.y),
-	])
+	var poly: PackedVector2Array
+	if pet.dragging():
+		var size := Vector2(DisplayServer.window_get_size(WINDOW_ID))
+		poly = PackedVector2Array([Vector2.ZERO, Vector2(size.x, 0), size,
+				Vector2(0, size.y)])
+	else:
+		var r: Rect2 = pet.hit_rect().grow(HIT_MARGIN)
+		if _pet3d:
+			r = r.merge(Rect2(_pet3d.position, Vector2(220, 220)))
+		poly = PackedVector2Array([
+			r.position,
+			r.position + Vector2(r.size.x, 0),
+			r.end,
+			r.position + Vector2(0, r.size.y),
+		])
 	if poly != _last_polygon:
 		_last_polygon = poly
 		DisplayServer.window_set_mouse_passthrough(poly, WINDOW_ID)
