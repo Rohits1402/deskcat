@@ -42,6 +42,10 @@ Java behavior described here. Status: `[x]` ported, `[~]` partial, `[ ]` todo.
       `screen_get_usable_rect`, free); manual override existed in Java tray.
 - [ ] **Hide behind taskbar** — right-click option; pet sinks so only the
       top peeks above the taskbar; toggling restores.
+- [ ] **Survive virtual-desktop switches** — pet stays visible on every
+      Windows virtual desktop (native ext polls
+      `IVirtualDesktopManager::IsWindowOnCurrentVirtualDesktop` and moves
+      the overlay to the active desktop when it changes).
 - [ ] **Start with Windows** — user-toggled HKCU Run entry via `reg.exe`
       (the ONLY registry access allowed).
 - [x] **Tray icon** — StatusIndicator; menu: skins, size, peer fade,
@@ -65,6 +69,9 @@ Java behavior described here. Status: `[x]` ported, `[~]` partial, `[ ]` todo.
       no extra windows, overlap click-through comes free.
 - [ ] **Same-host suppression** — two instances on one PC don't mirror
       each other (packet source address vs local addresses, sticky).
+- [~] **Do Not Disturb** — tray toggle: hide all remote pets and ignore
+      incoming chat/shoot; only your own pet stays visible. You still
+      broadcast presence. *Tray toggle exists; enforcement lands with LAN.*
 - [ ] **Chat** — input box near pet (grows while typing, Enter sends,
       Esc dismisses); broadcast to all; `@name` DMs (delivered only to
       target); speech bubbles word-wrap, ~5 s, fade out; own bubble too.

@@ -24,6 +24,20 @@ static func hide_from_taskbar(window_id: int) -> void:
 	ClassDB.instantiate("DeskCatWinTricks").hide_from_taskbar(hwnd)
 
 
+## Keeps the overlay on whatever virtual desktop the user switches to.
+## Call ~1x/second; returns false when unsupported (stop polling then).
+static var _win_tricks: Object = null
+
+static func ensure_on_current_desktop(window_id: int) -> bool:
+	if not available():
+		return false
+	if _win_tricks == null:
+		_win_tricks = ClassDB.instantiate("DeskCatWinTricks")
+	var hwnd := DisplayServer.window_get_native_handle(
+			DisplayServer.WINDOW_HANDLE, window_id)
+	return _win_tricks.ensure_on_current_desktop(hwnd)
+
+
 ## Global keystroke COUNTER (privacy: key identities are never read — the
 ## native hook only increments an int). Returns keys pressed since last call.
 static var _key_counter: Object = null

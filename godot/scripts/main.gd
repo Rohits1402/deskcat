@@ -12,12 +12,21 @@ const HIT_MARGIN := 28.0
 
 @onready var pet: Node2D = $Pet
 
+## Do Not Disturb: hide remote pets, ignore incoming chat/shoot.
+## (Own presence still broadcasts; enforced by the LAN layer when it lands.)
+var dnd := false
+
 var _tray: StatusIndicator
 var _pet3d: Node = null
 var _last_polygon := PackedVector2Array()
+var _desktop_poll := 0.0
+var _desktop_poll_supported := true
 
 
 func _ready() -> void:
+	# Perf: hard 60 fps cap; _process drops it to 30 while the pet sleeps.
+	# (2D MSAA stays off — nearest-filtered pixel art gains nothing from it.)
+	Engine.max_fps = 60
 	# Fully transparent clear color — anything else leaves ghost outlines
 	# smeared behind moving sprites on the transparent framebuffer.
 	get_viewport().transparent_bg = true
@@ -51,6 +60,7 @@ func _setup_tray() -> void:
 	menu.add_radio_check_item("Size: Large", 12)
 	menu.set_item_checked(menu.get_item_index(10), true)
 	menu.add_separator()
+	menu.add_check_item("Do Not Disturb (only my pet)", 30)
 	menu.add_check_item("3D test pet", 20)
 	menu.add_separator()
 	menu.add_item("Quit", 0)
@@ -65,7 +75,8 @@ func _on_tray(id: int) -> void:
 		0:
 			get_tree().quit()
 		10, 11, 12:
-			pet.size_factor = [1.0, 1.35, 1.7][id - 10]
+			# Java scales: Small 3 / Normal 4 / Large 5 px per art pixel.
+			pet.size_factor = [1.0, 4.0 / 3.0, 5.0 / 3.0][id - 10]
 			for item_id in [10, 11, 12]:
 				menu.set_item_checked(menu.get_item_index(item_id),
 						item_id == id)
@@ -74,6 +85,10 @@ func _on_tray(id: int) -> void:
 			var on := not menu.is_item_checked(idx)
 			menu.set_item_checked(idx, on)
 			_toggle_pet3d(on)
+		30:
+			var idx := menu.get_item_index(30)
+			dnd = not menu.is_item_checked(idx)
+			menu.set_item_checked(idx, dnd)
 
 
 ## Proof-of-concept 3D pet: a SubViewport with transparent background
@@ -107,8 +122,20 @@ func _tray_icon() -> Texture2D:
 	return ImageTexture.create_from_image(img)
 
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
 	_update_passthrough()
+	# Perf: idle-down to 30 fps while asleep with nothing animating.
+	var can_doze: bool = pet.state == pet.State.SLEEP \
+			and pet.particles.is_empty() and _pet3d == null
+	Engine.max_fps = 30 if can_doze else 60
+	# Follow the user across Windows virtual desktops (needs native ext).
+	if _desktop_poll_supported:
+		_desktop_poll += delta
+		if _desktop_poll >= 1.0:
+			_desktop_poll = 0.0
+			_desktop_poll_supported = \
+					NativeBridge.ensure_on_current_desktop(WINDOW_ID) \
+					or not NativeBridge.available()
 
 
 ## The overlay must swallow clicks ONLY over interactive sprites; the rest
