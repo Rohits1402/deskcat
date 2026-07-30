@@ -17,6 +17,7 @@ const CLICK_MAX_TIME := 0.22
 const CLICK_MAX_MOVE := 6.0
 
 var skin: PetSkin
+var skin_name := "squirtle"
 var state := State.IDLE
 var size_factor := 1.0  # tray: Small 1 / Normal 4/3 / Large 5/3
 var t := 0.0
@@ -109,7 +110,7 @@ func screen_w() -> float:
 func _ready() -> void:
 	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST  # crisp pixel art
 	var args := OS.get_cmdline_user_args()
-	skin = PetSkin.load(args[0] if args.size() > 0 else "squirtle")
+	set_skin(args[0] if args.size() > 0 else "squirtle")
 	if _part_tex.is_empty():
 		_part_tex = {
 			heart = ParticleArt.heart(),
@@ -119,6 +120,12 @@ func _ready() -> void:
 			alert = ParticleArt.alert(),
 		}
 	home_x = position.x
+
+
+func set_skin(id: String) -> void:
+	skin_name = id.to_lower()
+	skin = PetSkin.load(skin_name)
+	squash_vel = 4.0  # little boing on change
 
 
 func _process(delta: float) -> void:

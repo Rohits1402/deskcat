@@ -8,3 +8,6 @@ native/extension_api.json
 native/.sconsign.dblite
 native/*.obj
 native/src/*.obj
+native/src/*.obj.import
+native/src/*.exp
+native/src/*.lib

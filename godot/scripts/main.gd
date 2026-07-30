@@ -66,6 +66,12 @@ func _setup_tray() -> void:
 	_tray.tooltip = "DeskCat (Godot)"
 	var menu := PopupMenu.new()
 	add_child(menu)
+	menu.add_radio_check_item("Skin: Squirtle", 40)
+	menu.add_radio_check_item("Skin: Pikachu", 41)
+	menu.add_radio_check_item("Skin: Cat", 42)
+	var cur := 40 + ["squirtle", "pikachu", "cat"].find(pet.skin_name)
+	menu.set_item_checked(menu.get_item_index(cur), true)
+	menu.add_separator()
 	menu.add_radio_check_item("Size: Small", 10)
 	menu.add_radio_check_item("Size: Normal", 11)
 	menu.add_radio_check_item("Size: Large", 12)
@@ -100,6 +106,11 @@ func _on_tray(id: int) -> void:
 			var idx := menu.get_item_index(30)
 			dnd = not menu.is_item_checked(idx)
 			menu.set_item_checked(idx, dnd)
+		40, 41, 42:
+			pet.set_skin(["squirtle", "pikachu", "cat"][id - 40])
+			for item_id in [40, 41, 42]:
+				menu.set_item_checked(menu.get_item_index(item_id),
+						item_id == id)
 
 
 ## Proof-of-concept 3D pet: a SubViewport with transparent background
