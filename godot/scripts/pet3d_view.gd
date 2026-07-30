@@ -4,11 +4,23 @@
 ## CSG mannequin if the model is missing.
 extends SubViewportContainer
 
-const MODEL := "res://assets/kenney/animal-cat.glb"
+const MODEL_DIR := "res://assets/kenney/cube-pets/"
 
 var rig: Node3D
 var _t := 0.0
 var _has_model := false
+
+
+static func available_models() -> PackedStringArray:
+	var out := PackedStringArray()
+	var dir := DirAccess.open(MODEL_DIR)
+	if dir:
+		for f in dir.get_files():
+			# exported builds list "x.glb.remap"; strip to the resource name
+			var clean := f.trim_suffix(".remap").trim_suffix(".import")
+			if clean.ends_with(".glb") and not out.has(clean):
+				out.append(clean)
+	return out
 
 
 func _ready() -> void:
@@ -33,24 +45,44 @@ func _ready() -> void:
 	rig = Node3D.new()
 	vp.add_child(rig)
 
-	if ResourceLoader.exists(MODEL):
-		var scene: PackedScene = load(MODEL)
+	var models := available_models()
+	if models.size() > 0:
+		var file: String = models[randi() % models.size()]
+		var scene: PackedScene = load(MODEL_DIR + file)
 		if scene:
 			var model := scene.instantiate()
 			rig.add_child(model)
 			_has_model = true
+			_toonify(model)
 			var anim: AnimationPlayer = model.find_child(
 					"AnimationPlayer", true, false)
 			if anim and anim.get_animation_list().size() > 0:
 				var list := anim.get_animation_list()
 				var pick: StringName = list[0]
-				for name in list:
-					if String(name).to_lower().contains("idle"):
-						pick = name
+				for anim_name in list:
+					if String(anim_name).to_lower().contains("idle"):
+						pick = anim_name
 				anim.get_animation(pick).loop_mode = Animation.LOOP_LINEAR
 				anim.play(pick)
 	if not _has_model:
 		_build_mannequin()
+
+
+## Flat cartoon look: toon diffuse/specular on every material, keeping the
+## original albedo/colormap texture.
+func _toonify(model: Node) -> void:
+	for mi in model.find_children("*", "MeshInstance3D", true, false):
+		var mesh: Mesh = mi.mesh
+		if mesh == null:
+			continue
+		for s in mesh.get_surface_count():
+			var mat := mi.get_active_material(s)
+			if mat is StandardMaterial3D:
+				var toon: StandardMaterial3D = mat.duplicate()
+				toon.diffuse_mode = BaseMaterial3D.DIFFUSE_TOON
+				toon.specular_mode = BaseMaterial3D.SPECULAR_TOON
+				toon.roughness = 1.0
+				mi.set_surface_override_material(s, toon)
 
 
 func _build_mannequin() -> void:

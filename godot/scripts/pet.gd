@@ -4,7 +4,10 @@
 ## skins (cat / pikachu / squirtle — sprites generated in code, no assets).
 extends Node2D
 
-enum State { IDLE, PET, DRAG, STARTLE, ATTACK, KNEAD, PATROL, RETURN, SLEEP }
+enum State { IDLE, PET, DRAG, STARTLE, ATTACK, KNEAD, PATROL, RETURN, SLEEP,
+		FALL }
+
+const GRAVITY := 2400.0
 
 ## Java scales: Small 3 / Normal 4 / Large 5 pixels per art pixel.
 const PX_BASE := 3.0
@@ -43,12 +46,19 @@ var next_blink := 3.0
 
 var _prev_cursor := Vector2.ZERO
 var _cursor_vel := Vector2.ZERO
+var fall_vel := 0.0
 
-# Damped spring squash (port of Spring.java).
-var squash := 0.0
-var squash_vel := 0.0
-const STIFF := 180.0
+# Spring.java port: scale_y spring around 1.0, stiffness 160, damping 12,
+# clamped [0.7, 1.5]; scale_x = 1 - (scale_y - 1) * 0.55.
+var spring_val := 1.0
+var spring_vel := 0.0
+const STIFF := 160.0
 const DAMP := 12.0
+
+# Tail wag: TAIL_CYCLE ping-pong, cadence per state (java-render-spec §6).
+const TAIL_CYCLE := [0, 1, 2, 1]
+var tail_frame := 0
+var tail_t := 0.0
 
 # --- particles ---------------------------------------------------------------
 # {pos: Vector2 (local), vel: Vector2, life: float, max: float, kind: String}
@@ -58,7 +68,10 @@ static var _part_tex: Dictionary = {}
 
 
 func px() -> float:
-	return PX_BASE * size_factor
+	var base := PX_BASE
+	if skin and skin.px_scale_override > 0.0:
+		base = skin.px_scale_override
+	return base * size_factor
 
 
 func body_w() -> float:
@@ -125,7 +138,11 @@ func _ready() -> void:
 func set_skin(id: String) -> void:
 	skin_name = id.to_lower()
 	skin = PetSkin.load(skin_name)
-	squash_vel = 4.0  # little boing on change
+	# Pixel skins stay crisp; downscaled image skins need smoothing.
+	texture_filter = (CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+			if skin.eye_style == PetSkin.EYE_BAKED
+			else CanvasItem.TEXTURE_FILTER_NEAREST)
+	spring_vel += 3.0  # little boing on change
 
 
 func _process(delta: float) -> void:
@@ -133,6 +150,7 @@ func _process(delta: float) -> void:
 	_update_spring(delta)
 	_update_cursor_tracking(delta)
 	_update_blink(delta)
+	_update_tail(delta)
 
 	var keys := NativeBridge.key_delta()
 
@@ -186,22 +204,38 @@ func _process(delta: float) -> void:
 				facing_left = false
 				state = State.IDLE
 				idle_time = 0.0
+		State.FALL:
+			fall_vel += GRAVITY * delta
+			position.y += fall_vel * delta
+			if position.y >= floor_y():
+				position.y = floor_y()
+				state = State.IDLE
+				idle_time = 0.0
+				spring_vel += clampf(-fall_vel / 250.0, -6.0, -2.0)  # land squish
+				for i in 3:
+					_spawn(&"dust", Vector2(randf_range(-1, 1) * body_w() * 0.5,
+							-4.0))
 		State.SLEEP:
 			if randf() < delta * 0.8:
 				_spawn(&"zzz", Vector2(body_w() * 0.3, -body_h() * 0.9))
 			if keys > 0 or _cursor_near() or pressed:
 				state = State.IDLE
 				idle_time = 0.0
-				squash_vel = 5.0  # wake-up boing
+				spring_vel += 2.0  # wake-up boing (Java un-hide kick)
 
 	_update_particles(delta)
 	queue_redraw()
 
 
 func _update_spring(delta: float) -> void:
-	var accel := -STIFF * squash - DAMP * squash_vel
-	squash_vel += accel * delta
-	squash = clampf(squash + squash_vel * delta, -0.6, 0.6)
+	var target := 1.0
+	if state == State.DRAG:
+		target = 1.2
+	elif state == State.FALL:
+		target = 1.12
+	spring_vel += (target - spring_val) * STIFF * delta
+	spring_vel -= spring_vel * DAMP * delta
+	spring_val = clampf(spring_val + spring_vel * delta, 0.7, 1.5)
 
 
 func _update_cursor_tracking(delta: float) -> void:
@@ -209,6 +243,22 @@ func _update_cursor_tracking(delta: float) -> void:
 	if delta > 0.0:
 		_cursor_vel = (cur - _prev_cursor) / delta
 	_prev_cursor = cur
+
+
+## Java tail cadence: sleep 0.8s, startled 0.12, walking 0.15, else 0.3.
+func _update_tail(delta: float) -> void:
+	var interval := 0.3
+	match state:
+		State.SLEEP:
+			interval = 0.8
+		State.STARTLE:
+			interval = 0.12
+		State.PATROL, State.RETURN:
+			interval = 0.15
+	tail_t += delta
+	if tail_t >= interval:
+		tail_t = 0.0
+		tail_frame = (tail_frame + 1) % TAIL_CYCLE.size()
 
 
 func _update_blink(delta: float) -> void:
@@ -238,7 +288,7 @@ func _check_startle() -> void:
 	if to_pet.length() < 260.0 and closing > STARTLE_CURSOR_SPEED:
 		state = State.STARTLE
 		state_timer = 0.5
-		squash_vel = 7.0  # jump stretch
+		spring_vel += 5.0  # jump stretch
 		pet_heat = 0.0
 		_spawn(&"alert", Vector2(0, -body_h() - 10))
 
@@ -315,15 +365,18 @@ func _unhandled_input(event: InputEvent) -> void:
 		elif not event.pressed and pressed:
 			pressed = false
 			if state == State.DRAG:
-				state = State.IDLE
-				squash_vel = -6.0  # squish on drop
+				if position.y < floor_y() - 2.0:
+					state = State.FALL   # dropped mid-air: fall to taskbar
+					fall_vel = 0.0
+				else:
+					state = State.IDLE
+					spring_vel += 3.0  # Java drag-release kick
 			elif press_time < CLICK_MAX_TIME:
 				_attack()
 			idle_time = 0.0
 	elif event is InputEventMouseMotion and pressed and state != State.DRAG:
 		if event.position.distance_to(press_pos) > CLICK_MAX_MOVE:
-			state = State.DRAG
-			squash_vel = 8.0  # stretch on grab
+			state = State.DRAG  # spring target 1.2 does the stretch
 	if pressed and state != State.DRAG:
 		press_time += get_process_delta_time()
 
@@ -333,7 +386,7 @@ func _unhandled_input(event: InputEvent) -> void:
 func _attack() -> void:
 	state = State.ATTACK
 	state_timer = 0.35
-	squash_vel = -5.0
+	spring_vel += 5.0  # Java attack-hop kick
 	var dir := -1.0 if facing_left else 1.0
 	match skin.attack_type:
 		PetSkin.ATTACK_WATER_GUN:
@@ -376,95 +429,130 @@ func _update_particles(delta: float) -> void:
 
 # --- rendering ---------------------------------------------------------------
 
+# FBO layout constants from the Java app (java-render-spec.md §1):
+# 40x30-unit canvas, origin at bottom-center (x=20), y-up; body at x=2.
+const FBO_W := 40.0
+const BODY_X := 2.0
+const C_OUTLINE := Color("26202a")
+
+
+## Convert a Java FBO rect (x, y measured y-UP from the feet) to local
+## y-down coords under the draw transform.
+static func fbo_rect(x: float, y_up: float, w: float, h: float) -> Rect2:
+	return Rect2(x - FBO_W / 2, -(y_up + h), w, h)
+
+
 func _draw() -> void:
 	var bob := 0.0
-	var sy_extra := 1.0
+	var waddle := 0.0
 	match state:
-		State.IDLE, State.PET:
-			bob = sin(t * 2.2) * 0.8
 		State.PATROL, State.RETURN:
-			bob = absf(sin(t * 9.0)) * -1.2
-		State.SLEEP:
-			sy_extra = 0.8
-		State.KNEAD:
-			bob = sin(t * 12.0) * 0.6
+			bob = absf(sin(t * 9.0)) * 0.8
+			waddle = sin(t * 9.0) * 3.0
+		_:
+			pass
 
 	var flip := -1.0 if facing_left else 1.0
-	var sx := (1.0 - squash * 0.5) * px()
-	var sy := (1.0 + squash * 0.5) * px() * sy_extra
+	var scale_y := spring_val
+	var scale_x := 1.0 - (scale_y - 1.0) * 0.55
+	# Java petting: whole-body x jitter, eyes unchanged (spec §3.2).
+	var shake := sin(t * 45.0) * 0.25 if state == State.PET else 0.0
+
+	draw_set_transform(Vector2(0, -bob * px()), deg_to_rad(waddle) * flip,
+			Vector2(px() * scale_x * flip, px() * scale_y))
 
 	var bw := float(skin.body_size.x)
 	var bh := float(skin.body_size.y)
 
-	# Everything body-related draws in art-pixel coords under one transform,
-	# so squash/flip/scale hit all parts together (the Java FBO trick).
-	draw_set_transform(Vector2(0, bob * px()), 0.0, Vector2(sx * flip, sy))
-
-	# tail (behind body), 3 wag frames
-	if skin.tail.size() == 3:
-		var frame := 0
-		if state != State.SLEEP:
-			frame = int(t * 5.0) % 3
-		var tail_tex: ImageTexture = skin.tail[frame]
-		var ts := Vector2(tail_tex.get_size())
-		draw_texture_rect(tail_tex, Rect2(
-				skin.tail_x - bw / 2 - 2, -ts.y - 1, ts.x, ts.y), false)
-
-	draw_texture_rect(skin.body, Rect2(-bw / 2, -bh, bw, bh), false)
-	_draw_eyes(bw, bh)
+	if skin.eye_style == PetSkin.EYE_BAKED:
+		# Image skin: single texture, face baked in.
+		draw_texture_rect(skin.body, Rect2(-bw / 2, -bh, bw, bh), false)
+	else:
+		# tail first (behind body), TAIL_CYCLE ping-pong frames
+		if skin.tail.size() == 3:
+			var tail_tex: ImageTexture = skin.tail[TAIL_CYCLE[tail_frame]]
+			var ts := Vector2(tail_tex.get_size())
+			draw_texture_rect(tail_tex,
+					fbo_rect(skin.tail_x + shake, 0, ts.x, ts.y), false)
+		draw_texture_rect(skin.body,
+				fbo_rect(BODY_X + shake, 0, bw, bh), false)
+		_draw_eyes(shake)
+		if state == State.KNEAD and skin.paw:
+			var left_up := sin(t * 14.0) > 0.0
+			draw_texture_rect(skin.paw,
+					fbo_rect(9 + shake, 1.0 if left_up else 0.0, 4, 4), false)
+			draw_texture_rect(skin.paw,
+					fbo_rect(18 + shake, 0.0 if left_up else 1.0, 4, 4), false)
 
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 	_draw_particles()
 
 
-func _draw_eyes(bw: float, bh: float) -> void:
-	var dark := Color("26202a")
-	var closed := blink > 0.0 or state == State.SLEEP
-	var happy := state == State.PET or state == State.KNEAD
+## Faithful port of drawOpenEye/drawClosedEye + gaze math
+## (java-render-spec.md §4-5). All coords are FBO units, y-up.
+func _draw_eyes(shake: float) -> void:
+	var closed := blink > 0.0 or state == State.SLEEP \
+			or (state == State.ATTACK and state_timer > 0.15)
+	var startled := state == State.STARTLE
+	var knead := state == State.KNEAD
 
-	# gaze offset in art pixels, from the cursor direction
-	var look_v := global_cursor() - global_position \
-			+ Vector2(0, bh * px() * 0.6)
-	var look := Vector2(clampf(look_v.x / 120.0, -1.0, 1.0),
-			clampf(look_v.y / 120.0, -1.0, 1.0)).round()
+	# Gaze: cursor delta from the eye center in SCREEN px, /240, clamped.
+	var flip := -1.0 if facing_left else 1.0
+	var eye_scr := global_position + Vector2(
+			(skin.eye_center.x - FBO_W / 2) * px() * flip,
+			-skin.eye_center.y * px())
+	var cur := global_cursor()
+	var gaze_x := clampf((cur.x - eye_scr.x) / 240.0, -1.0, 1.0)
+	var gaze_y := clampf((eye_scr.y - cur.y) / 240.0, -1.0, 1.0)  # +1 above
+	var pgx := 1 if gaze_x > 0.3 else (-1 if gaze_x < -0.3 else 0)
+	if (state == State.PATROL or state == State.RETURN) and facing_left:
+		pgx = -pgx  # canvas is mirrored while walking left
+	var iris_y := float(skin.eye_y) \
+			if (knead or gaze_y < -0.25) else float(skin.eye_y + 1)
+	var gaze_down := -1.0 if knead else gaze_y
 
-	for ex in [skin.eye_lx, skin.eye_rx]:
-		# local art coords: body spans x -bw/2..bw/2, y -bh..0
-		var r := Rect2(ex - bw / 2, skin.eye_y - bh,
-				skin.eye_w, skin.eye_h)
+	var ew := float(skin.eye_w)
+	var eh := float(skin.eye_h)
+	var ey := float(skin.eye_y)
+
+	for base_x in [skin.eye_lx, skin.eye_rx]:
+		var ex := float(base_x) + shake
 		if closed:
-			draw_rect(Rect2(r.position, Vector2(r.size.x, r.size.y)),
-					skin.fur_color)
-			draw_rect(Rect2(r.position + Vector2(0, r.size.y - 1),
-					Vector2(r.size.x, 1)), dark)
-		elif happy:
-			draw_rect(Rect2(r.position + Vector2(0, 1),
-					Vector2(r.size.x, 1)), dark)
-			draw_rect(Rect2(r.position + Vector2(0, 0),
-					Vector2(1, 2)), dark)
-			draw_rect(Rect2(r.position + Vector2(r.size.x - 1, 0),
-					Vector2(1, 2)), dark)
-		else:
-			# Iris rides the gaze but always stays inside the white.
-			match skin.eye_style:
-				PetSkin.EYE_SOLID_BEAD:
-					draw_rect(r, dark)
-					draw_rect(Rect2(r.position + Vector2(
-							clampf(1.0 + look.x, 0.0, r.size.x - 1.0), 0),
-							Vector2.ONE), Color.WHITE)
-				PetSkin.EYE_OUTLINED_BLOCK:
-					draw_rect(r.grow(1.0), dark)
-					draw_rect(r, Color.WHITE)
-					draw_rect(Rect2(r.position + Vector2(
-							clampf(1.0 + look.x, 0.0, r.size.x - 1.0),
-							clampf(1.0 + look.y, 0.0, r.size.y - 2.0)),
-							Vector2(1, 2)), skin.iris_color)
-				_:
-					draw_rect(r, Color.WHITE)
-					draw_rect(Rect2(r.position + Vector2(
-							clampf(1.0 + look.x, 0.0, r.size.x - 2.0),
-							clampf(look.y * 0.5, 0.0, 1.0)),
-							Vector2(2, r.size.y - 1)), skin.iris_color)
+			if skin.eye_style == PetSkin.EYE_OUTLINED_BLOCK:
+				draw_rect(fbo_rect(ex - 1, ey - 1, ew + 2, eh + 2),
+						skin.fur_color)
+				draw_rect(fbo_rect(ex - 1, ey + floorf(eh / 2), ew + 2, 1),
+						C_OUTLINE)
+			else:
+				draw_rect(fbo_rect(ex, ey, ew, eh), skin.fur_color)
+				draw_rect(fbo_rect(ex, ey + 1, ew, 1), C_OUTLINE)
+			continue
+		match skin.eye_style:
+			PetSkin.EYE_IRIS_ON_WHITE:  # cat: white patch is baked in
+				var irisx := ex + 1 + pgx
+				if startled:
+					draw_rect(fbo_rect(irisx, iris_y, 2, 2), C_OUTLINE)
+				else:
+					draw_rect(fbo_rect(irisx, iris_y, 2, 2), skin.iris_color)
+					draw_rect(fbo_rect(
+							irisx + (1 if pgx >= 0 else 0),
+							iris_y + (1 if gaze_down >= 0.0 else 0),
+							1, 1), C_OUTLINE)
+			PetSkin.EYE_SOLID_BEAD:  # pikachu
+				draw_rect(fbo_rect(ex, ey, ew, eh), C_OUTLINE)
+				if not startled:
+					draw_rect(fbo_rect(ex + 1 + pgx,
+							ey + eh - 1 if gaze_down >= 0.0 else ey + eh - 2,
+							1, 1), Color.WHITE)
+			PetSkin.EYE_OUTLINED_BLOCK:  # squirtle
+				draw_rect(fbo_rect(ex - 1, ey - 1, ew + 2, eh + 2), C_OUTLINE)
+				draw_rect(fbo_rect(ex, ey, ew, eh),
+						C_OUTLINE if startled else skin.iris_color)
+				if not startled:
+					draw_rect(fbo_rect(
+							ex + clampf(1 + pgx, 0, ew - 1),
+							ey + eh - 2 if gaze_down >= 0.0 else ey + eh - 3,
+							1, 2), Color.WHITE)
 
 
 func _draw_particles() -> void:

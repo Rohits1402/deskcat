@@ -17,6 +17,7 @@ const HIT_MARGIN := 28.0
 var dnd := false
 
 var _tray: StatusIndicator
+var _skin_ids: Array[String] = []
 var _pet3d: Node = null
 var _last_polygon := PackedVector2Array()
 var _desktop_poll := 0.0
@@ -66,11 +67,14 @@ func _setup_tray() -> void:
 	_tray.tooltip = "DeskCat (Godot)"
 	var menu := PopupMenu.new()
 	add_child(menu)
-	menu.add_radio_check_item("Skin: Squirtle", 40)
-	menu.add_radio_check_item("Skin: Pikachu", 41)
-	menu.add_radio_check_item("Skin: Cat", 42)
-	var cur := 40 + ["squirtle", "pikachu", "cat"].find(pet.skin_name)
-	menu.set_item_checked(menu.get_item_index(cur), true)
+	_skin_ids.clear()
+	var i := 0
+	for entry in PetSkin.catalog():
+		menu.add_radio_check_item("Skin: " + entry.label, 40 + i)
+		_skin_ids.append(entry.id)
+		if entry.id == pet.skin_name:
+			menu.set_item_checked(menu.get_item_index(40 + i), true)
+		i += 1
 	menu.add_separator()
 	menu.add_radio_check_item("Size: Small", 10)
 	menu.add_radio_check_item("Size: Normal", 11)
@@ -106,11 +110,12 @@ func _on_tray(id: int) -> void:
 			var idx := menu.get_item_index(30)
 			dnd = not menu.is_item_checked(idx)
 			menu.set_item_checked(idx, dnd)
-		40, 41, 42:
-			pet.set_skin(["squirtle", "pikachu", "cat"][id - 40])
-			for item_id in [40, 41, 42]:
-				menu.set_item_checked(menu.get_item_index(item_id),
-						item_id == id)
+		_:
+			if id >= 40 and id < 40 + _skin_ids.size():
+				pet.set_skin(_skin_ids[id - 40])
+				for j in _skin_ids.size():
+					menu.set_item_checked(menu.get_item_index(40 + j),
+							40 + j == id)
 
 
 ## Proof-of-concept 3D pet: a SubViewport with transparent background
