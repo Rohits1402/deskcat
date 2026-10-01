@@ -316,15 +316,104 @@ On `feature/wrap-fade-chat`:
   volume is the single control and 0 is silence. Session-only, like the
   reminders.
 
+## 20. Black cat, doge and goldfish
+
+Three new procedural skins, each with its own click move, chosen with the
+user up front:
+
+- **Black cat** — slimmer than the tabby, amber eyes. Click: the back
+  arches and the fur bristles (dark spikes off both flanks and a ridge on
+  the skull, pupils blown wide) for 0.35 s, then the existing paw-swipe
+  rig takes over. New `SoundFx.hiss()` — high-passed noise.
+- **Doge** — a Shiba Inu. Click: digs frantically for 1.6 s — paws
+  pumping, body jittering, eyes down, dirt clods flung up and out with
+  gravity. New `SoundFx.bork()` — a falling formant-filtered woof.
+- **Goldfish** — click: inflates to 1.3x like a pufferfish (ease in,
+  hold, wobbling deflate) while blowing bubbles from its mouth. New
+  `SoundFx.blub()` — two rising chirp bloops. It also **swims freely**:
+  a new wander state 5 steers the window toward random points anywhere in
+  the work area along lazy S-curves, instead of dropping to the floor and
+  patrolling. Any input sends it swimming straight home on both axes.
+
+Engine changes: `SkinAssets.swims` and `oneEye` flags; attack types 3–5;
+`roaming()` / `moving()` helpers replace the scattered
+`wanderState == 1 || 2` and `== 2 || 3` checks so every one of them now
+covers swimming; the remote-pet renderer honours `oneEye` too. Skin menu
+labels are explicit now ("Black cat", not "Blackcat").
+
+Art was iterated against a scratch preview rendered on a light **and** a
+dark backdrop before it went in, which caught three problems:
+
+- The black cat vanished on dark wallpaper — near-black outline on
+  near-black. Fixed with a lighter rim colour (`'1'`, #6B6178).
+- The doge read first as a jackalope (forked-looking ears) and then as a
+  fox. What makes it read as a Shiba: a wide face with puffy cream
+  cheeks, small upright ears, cream eyebrow spots, and 3x2 squinting eyes
+  for the smug look.
+- The goldfish, drawn head-on to suit the two-eye renderer, read as a
+  chick: the dorsal fin became a comb, the side fins wings. Redrawn in
+  profile with a forked waving tail and a single eye.
+
+## 21. Walk cycles, poses, quirks, pouncing and perching
+
+Everything recommended for the original three skins, plus a Pikachu redraw:
+
+- **Pose system** — a skin can now carry whole-frame poses alongside its
+  sitting body: `walkTex` (4-frame side-view walk, facing right),
+  `sleepTex` (2 breathing frames) and `rollTex` (belly-up, 2 frames), plus
+  Squirtle's `shellTex`. They're built in the new `PoseArt`, which has no
+  libGDX dependency so the scratch preview renders the exact shipping
+  pixels — the preview/port duplication of §20 is gone. While a pose
+  plays it replaces body, tail and runtime eyes. Peers' pets over LAN use
+  the walk and sleep poses too.
+- **Walk cycles** — legs actually step now; the sticker waddle is dropped
+  for skins with real frames. 8 fps on patrol, 12 fps hurrying home.
+- **Sleep poses** — the cat curls into a loaf, Pikachu flops on its
+  tummy, Squirtle tucks into its shell with its eyes closed in the dark.
+- **Belly-up** — about 3 s of continuous petting rolls it over, paws
+  pedalling, with hearts coming twice as fast.
+- **Idle quirks** (only while sitting quietly): cats groom — lick a
+  raised paw, then wipe it over the face; Pikachu's cheeks flash and throw
+  sparks; Squirtle ducks into its shell when startled or carried, peeks
+  out, then pops back.
+- **Pounce** (both cats) — a slowly moving cursor beside the pet for
+  ~0.6 s starts a stalk: crouch (squashed low, pupils blown), a
+  pre-pounce wiggle, then a parabolic window hop of up to 170 px toward
+  the cursor ending in a swat. A fast cursor calls it off.
+- **Overheat** — heat builds with keystrokes and cools over time
+  (~8 keys/s sustained trips it, normal typing doesn't): the pet flushes
+  red, kneads in a frenzy and steams; Pikachu crackles with static.
+  Rate is derived from the existing keystroke *counter* — still no key
+  identities.
+- **Perching** — when it would wander, 55% of the time it instead hops onto
+  the title bar of the foreground window (if that's an ordinary restored
+  window with room above it) and rides along as you move it. It tumbles
+  to the floor if the window closes, minimises or maximises, and hops home
+  after 1–2.5 minutes. New `Win32Windows` does the read-only lookups;
+  LWJGL's User32 lacks `GetForegroundWindow`/`IsWindow`/`GetClassNameW`/
+  `GetWindowThreadProcessId`, so those are resolved from user32.dll and
+  called through LWJGL's `JNI` trampolines. Probed against a real desktop
+  before shipping: correct rects and class names, and a maximised window
+  on the second monitor was correctly refused.
+- **Pikachu redrawn** — the day-one hand-typed sprite is replaced by the
+  procedural reference-matched body and slab bolt tail from the earlier
+  art sessions, with a new round-bead runtime eye (`eyeStyle 4`).
+
+Art went through the preview twice: the walking Pikachu first read as a
+shouting chick (cheek where a mouth goes, stubby ears), its belly-up pose
+showed both red cheeks where eyes belong, and Squirtle's shell with arm
+and leg holes read as a frowning face.
+
 ## Current state
 
-- **Skins**: Squirtle (default, procedural), Pikachu (character maps), and
-  the original orange tabby — switchable live from the tray's Skin submenu,
-  or at launch via `gradle run --args="pikachu"` etc.
+- **Skins**: Squirtle (default, procedural), Pikachu (character maps), the
+  original orange tabby, black cat, doge and goldfish — switchable live from
+  the tray's Skin submenu, or at launch via `gradle run --args="doge"` etc.
 - **Behaviors**: eye tracking, blink, tail animation, mochi drag, petting
   hearts, keyboard kneading, startle, click attacks (water gun /
-  thunderbolt / paw swipe) each with their own voice, endless bottom-edge
-  patrol with return-home, sleep, tray menu (skin switcher + size + taskbar
+  thunderbolt / paw swipe / hiss / dig / puff) each with their own voice,
+  endless bottom-edge patrol (free swimming for the goldfish) with
+  return-home, sleep, tray menu (skin switcher + size + taskbar
   gap + volume + quit), no taskbar button.
 - **LAN** (branch `feature/lan-presence`): peer discovery, remote pet
   windows with names, broadcast + DM chat with bubbles, right-click menus,
@@ -341,4 +430,5 @@ On `feature/wrap-fade-chat`:
 - Launch-at-startup, packaged double-clickable EXE (jpackage).
 - Per-pixel click-through on transparent areas (Win32 layered window work).
 - Note: Pokémon skins are personal-use fan art — strip them before any
-  public release; the cat is the original, shippable character.
+  public release; the cat, black cat, doge and goldfish are original and
+  shippable.

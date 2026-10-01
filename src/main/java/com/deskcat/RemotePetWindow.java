@@ -138,17 +138,34 @@ public class RemotePetWindow implements ApplicationListener {
         // body + tail drawn mirrored around the window center when facing left
         float cx = CatApp.UNITS_W / 2f;
         batch.setColor(1f, 1f, 1f, ga);
-        Texture tail = a.tailTex[TAIL_CYCLE[tailFrame]];
-        drawMirrored(tail, cx, a.tailX + 2 - cx, bob, sx, stretch, rot,
-                tail.getWidth(), tail.getHeight());
-        drawMirrored(a.bodyTex, cx, 4 - cx, bob, sx, stretch, rot,
-                a.bodyTex.getWidth(), a.bodyTex.getHeight());
+        // peers' pets use the same walk / sleep poses when they have them
+        Texture pose = null;
+        float poseX = 0f;
+        if (walking && a.walkTex != null) {
+            pose = a.walkTex[((int) (time * 8f)) % a.walkTex.length];
+            poseX = 22f - pose.getWidth() / 2f;
+        } else if (sleeping && a.sleepTex != null) {
+            pose = a.sleepTex[((int) (time / 1.1f)) % a.sleepTex.length];
+            poseX = 4f + a.bodyTex.getWidth() / 2f - pose.getWidth() / 2f;
+        }
+        if (pose != null) {
+            drawMirrored(pose, cx, poseX - cx, bob, sx, stretch, rot,
+                    pose.getWidth(), pose.getHeight());
+        } else {
+            Texture tail = a.tailTex[TAIL_CYCLE[tailFrame]];
+            drawMirrored(tail, cx, a.tailX + 2 - cx, bob, sx, stretch, rot,
+                    tail.getWidth(), tail.getHeight());
+            drawMirrored(a.bodyTex, cx, 4 - cx, bob, sx, stretch, rot,
+                    a.bodyTex.getWidth(), a.bodyTex.getHeight());
 
-        boolean closed = sleeping || blinkLeft > 0f
-                || peer.anim == LanMsg.ANIM_KO;
-        if (rot == 0f) {
-            drawEye(a, a.eyeLX + 2, closed, bob, sx, cx, ga);
-            drawEye(a, a.eyeRX + 2, closed, bob, sx, cx, ga);
+            boolean closed = sleeping || blinkLeft > 0f
+                    || peer.anim == LanMsg.ANIM_KO;
+            if (rot == 0f) {
+                drawEye(a, a.eyeLX + 2, closed, bob, sx, cx, ga);
+                if (!a.oneEye) {
+                    drawEye(a, a.eyeRX + 2, closed, bob, sx, cx, ga);
+                }
+            }
         }
 
         batch.end();
@@ -213,6 +230,12 @@ public class RemotePetWindow implements ApplicationListener {
             batch.draw(px, x, bob + a.eyeY, a.eyeW, a.eyeH);
             batch.setColor(1f, 1f, 1f, ga);
             batch.draw(px, x + 1, bob + a.eyeY + a.eyeH - 1, 1, 1);
+        } else if (a.eyeStyle == 4) {
+            tint(C_OUTLINE, ga);
+            batch.draw(px, x + 1, bob + a.eyeY, a.eyeW - 2, a.eyeH);
+            batch.draw(px, x, bob + a.eyeY + 1, a.eyeW, a.eyeH - 2);
+            batch.setColor(1f, 1f, 1f, ga);
+            batch.draw(px, x + 1, bob + a.eyeY + a.eyeH - 3, 1, 2);
         } else {
             tint(C_OUTLINE, ga);
             batch.draw(px, x - 1, bob + a.eyeY - 1, a.eyeW + 2, a.eyeH + 2);

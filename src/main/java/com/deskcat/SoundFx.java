@@ -29,6 +29,7 @@ final class SoundFx {
     static volatile float volume = 0.8f;
 
     private static short[] meowPcm, pikaPcm, squirtlePcm, splashPcm, chirpPcm;
+    private static short[] hissPcm, borkPcm, blubPcm;
 
     private static Sound meowClip;
     private static boolean meowClipTried;
@@ -104,6 +105,30 @@ final class SoundFx {
             chirpPcm = buildChirp();
         }
         play(chirpPcm);
+    }
+
+    /** Black cat voice: a breathy high-passed hiss. */
+    static void hiss() {
+        if (hissPcm == null) {
+            hissPcm = buildHiss();
+        }
+        play(hissPcm);
+    }
+
+    /** Doge voice: one short, falling "bork". */
+    static void bork() {
+        if (borkPcm == null) {
+            borkPcm = buildBork();
+        }
+        play(borkPcm);
+    }
+
+    /** Goldfish voice: two rising bubble bloops. */
+    static void blub() {
+        if (blubPcm == null) {
+            blubPcm = buildBlub();
+        }
+        play(blubPcm);
     }
 
     private static void play(final short[] pcm) {
@@ -281,6 +306,69 @@ final class SoundFx {
                 }
             }
             s[i] = (short) (v * Short.MAX_VALUE);
+        }
+        return s;
+    }
+
+    private static short[] buildHiss() {
+        double dur = 0.55;
+        int n = (int) (RATE * dur);
+        short[] s = new short[n];
+        Random r = new Random(17);
+        double hp = 0, prev = 0;
+        for (int i = 0; i < n; i++) {
+            double t = i / (double) RATE;
+            double u = t / dur;
+            double white = r.nextDouble() * 2 - 1;
+            hp = 0.6 * (hp + white - prev);   // crude high-pass: breathy, not rumbly
+            prev = white;
+            double env = Math.min(1, t / 0.03) * Math.pow(1 - u, 1.6);
+            s[i] = (short) (clip(hp * env * 0.55) * Short.MAX_VALUE);
+        }
+        return s;
+    }
+
+    private static short[] buildBork() {
+        double dur = 0.28;
+        int n = (int) (RATE * dur);
+        short[] s = new short[n];
+        Random rnd = new Random(23);
+        double ph = 0;
+        double[] r1 = new double[2];
+        for (int i = 0; i < n; i++) {
+            double t = i / (double) RATE;
+            double u = t / dur;
+            ph += 2 * Math.PI * (360 - 170 * u) / RATE;   // pitch drops
+            double src = 0;
+            for (int k = 1; k <= 6; k++) {
+                src += Math.sin(ph * k) / k;
+            }
+            src += (rnd.nextDouble() * 2 - 1) * 0.4 * Math.max(0, 1 - u * 5);
+            double v = reson(src, 700 - 250 * u, 0.94, r1);
+            double env = Math.min(1, t / 0.012) * Math.pow(1 - u, 1.3);
+            s[i] = (short) (clip(v * env * 2.6) * Short.MAX_VALUE * 0.7);
+        }
+        return s;
+    }
+
+    private static short[] buildBlub() {
+        double dur = 0.42;
+        int n = (int) (RATE * dur);
+        short[] s = new short[n];
+        double[] starts = {0.0, 0.17};
+        double bubble = 0.16, rise = 900 / bubble;
+        for (int i = 0; i < n; i++) {
+            double t = i / (double) RATE;
+            double v = 0;
+            for (double st : starts) {
+                double bt = t - st;
+                if (bt >= 0 && bt < bubble) {
+                    // linear chirp, phase integrated so it stays smooth
+                    double phase = 2 * Math.PI * (380 * bt + 0.5 * rise * bt * bt);
+                    v += Math.sin(phase) * Math.sin(Math.PI * bt / bubble) * 0.34;
+                }
+            }
+            s[i] = (short) (clip(v) * Short.MAX_VALUE);
         }
         return s;
     }

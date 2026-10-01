@@ -34,6 +34,18 @@ taskbar-free window and reacts to what you do — inspired by desktop pets like
   musical notes float up. Detection reads only the output peak level (a
   single loudness number via Windows Core Audio) — no audio is ever
   captured or recorded.
+- **Perches on your windows** — now and then it hops up onto the title
+  bar of the window you're using and rides along when you drag it. If the
+  window is closed, minimised or maximised it tumbles down to the taskbar.
+  It only reads window positions; it never touches other apps.
+- **Real walk cycles and poses** — the cat, Pikachu and Squirtle walk
+  with moving legs, curl up (or tuck into a shell) to sleep, and roll
+  belly-up after a few seconds of petting.
+- **Personality** — cats groom themselves and will stalk a slowly moving
+  cursor, crouch, wiggle and pounce at it; Pikachu's cheeks spark now and
+  then; Squirtle ducks into its shell when startled or picked up. Type
+  fast for a while and your pet overheats — flushed red and steaming
+  (Pikachu crackles with static instead).
 - **Start with Windows** — one tray checkbox registers the packaged
   jar/exe in the per-user Run key (HKCU); untick to remove it.
 - **System tray** — no taskbar button; the tray icon hosts the skin
@@ -45,7 +57,10 @@ taskbar-free window and reacts to what you do — inspired by desktop pets like
 |------|------|--------------|
 | `squirtle` (default) | outlined iris blocks | water gun — droplet fountain with gravity |
 | `pikachu` | bead eyes with glint | thunderbolt — triple lightning strike |
-| `cat` | green cat eyes | just gets startled (it's a cat) |
+| `cat` | green cat eyes | paw swipe toward your cursor, claws out |
+| `blackcat` | amber cat eyes | arches and hisses, fur bristling, then swipes |
+| `doge` | smug squinting eyes | digs frantically, flinging dirt |
+| `goldfish` | one eye, in profile | puffs up like a pufferfish, blowing bubbles |
 
 All sprites are generated in code — either authored as character maps or
 built from overlapping ellipses with an automatic outline pass. There are no
