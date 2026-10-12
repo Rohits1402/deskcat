@@ -62,9 +62,9 @@ taskbar-free window and reacts to what you do — inspired by desktop pets like
 | `doge` | smug squinting eyes | digs frantically, flinging dirt |
 | `goldfish` | one eye, in profile | puffs up like a pufferfish, blowing bubbles |
 
-All sprites are generated in code — either authored as character maps or
-built from overlapping ellipses with an automatic outline pass. There are no
-image assets.
+All sprites are drawn in code as hand-placed pixel shapes (each part an
+SVG-style path) with one clean outline grown around the whole pet. There are
+no image assets.
 
 > The Pokémon-inspired skins are personal-use fan art. Do not distribute or
 > sell builds containing them; the cat is the only original character.

@@ -44,14 +44,17 @@ public class SkinAssets {
     public int eyeLX, eyeRX, eyeW, eyeH, eyeY;
     public float eyeCenterX, eyeCenterY;
     public Color furColor, irisColor;
+    /** Closed-eye line; null means the usual dark outline. */
+    public Color lineColor;
 
     private static final Color C_ORANGE = Color.valueOf("F29A4B");
-    private static final Color C_YELLOW = Color.valueOf("F9D848");
+    private static final Color C_YELLOW = Color.valueOf("F7D23E");
     private static final Color C_BLUE = Color.valueOf("8CCFE8");
     private static final Color C_IRIS_GREEN = Color.valueOf("7CC46B");
     private static final Color C_IRIS_BROWN = Color.valueOf("5B3A26");
-    private static final Color C_BLACK_FUR = Color.valueOf("3A3340");
-    private static final Color C_AMBER = Color.valueOf("C9861A");
+    private static final Color C_BLACK_FUR = Color.valueOf("2E2936");
+    private static final Color C_BLACK_LINE = Color.valueOf("ECE8F4");
+    private static final Color C_AMBER = Color.valueOf("F2C14E");
     private static final Color C_SHIBA = Color.valueOf("D9A066");
     private static final Color C_GOLDFISH = Color.valueOf("FF8C3A");
 
@@ -73,71 +76,64 @@ public class SkinAssets {
         if ("squirtle".equals(skin)) {
             a.eyeStyle = 2;
             a.attackType = 2;
-            a.bodyTex = PixelArt.squirtleBody();
-            a.tailTex = PixelArt.squirtleTail();
-            a.walkTex = frames(4, PoseArt::squirtWalk);
-            a.sleepTex = frames(2, PoseArt::squirtSleep);
-            a.rollTex = frames(2, PoseArt::squirtRoll);
-            a.shellTex = PixelArt.tex(PoseArt.squirtShell(false));
+            a.bodyTex = PixelArt.tex(SquirtArt.sitBody());
+            a.tailTex = frames(3, SquirtArt::sitTail);
+            a.walkTex = frames(4, SquirtArt::walk);
+            a.sleepTex = frames(2, SquirtArt::sleep);
+            a.rollTex = frames(2, SquirtArt::roll);
+            a.shellTex = PixelArt.tex(SquirtArt.shell(false, 0));
             a.shellEyeX = 13;
             a.shellEyeY = 6;
-            a.tailX = 26;
-            a.eyeLX = 11;
-            a.eyeRX = 20;
+            a.tailX = 24;
+            a.eyeLX = 10;
+            a.eyeRX = 21;
             a.eyeW = 3;
             a.eyeH = 4;
             a.eyeY = 16;
-            a.eyeCenterX = 16.5f;
-            a.eyeCenterY = 17.5f;
+            a.eyeCenterX = 17f;
+            a.eyeCenterY = 18f;
             a.furColor = C_BLUE;
             a.irisColor = C_IRIS_BROWN;
-            a.pawTex = PixelArt.fromMap(PixelArt.PAW_SQUIRT);
+            a.pawTex = PixelArt.tex(PathArt.paw(SquirtArt.SQUIRT, PathArt.FUR));
         } else if ("pikachu".equals(skin)) {
             a.eyeStyle = 4;      // round beads, drawn at runtime
             a.attackType = 1;
-            a.bodyTex = PixelArt.tex(PoseArt.pikaBody());
-            a.tailTex = frames(3, PoseArt::pikaTail);
-            a.walkTex = frames(4, PoseArt::pikaWalk);
-            a.sleepTex = frames(2, PoseArt::pikaSleep);
-            a.rollTex = frames(2, PoseArt::pikaRoll);
-            a.tailX = 21;
-            a.eyeLX = 14;
+            a.bodyTex = PixelArt.tex(PikaArt.sitBody());
+            a.tailTex = frames(3, PikaArt::sitTail);
+            a.walkTex = frames(4, PikaArt::walk);
+            a.sleepTex = frames(2, PikaArt::sleep);
+            a.rollTex = frames(2, PikaArt::roll);
+            a.tailX = 23;
+            a.eyeLX = 10;
             a.eyeRX = 20;
-            a.eyeW = 3;
-            a.eyeH = 4;
-            a.eyeY = 17;
-            a.eyeCenterX = 18f;
-            a.eyeCenterY = 19f;
-            a.cheekLX = 13f;
-            a.cheekRX = 23f;
-            a.cheekY = 14.4f;
+            a.eyeW = 4;
+            a.eyeH = 5;
+            a.eyeY = 12;
+            a.eyeCenterX = 17f;
+            a.eyeCenterY = 14.5f;
+            a.cheekLX = 7.5f;
+            a.cheekRX = 26.5f;
+            a.cheekY = 10f;
             a.furColor = C_YELLOW;
             a.irisColor = C_IRIS_GREEN;
-            a.pawTex = PixelArt.fromMap(PixelArt.PAW_PIKA);
+            a.pawTex = PixelArt.tex(PathArt.paw(PikaArt.PIKA, PathArt.FUR));
         } else if ("blackcat".equals(skin)) {
-            a.eyeStyle = 0;
+            catArt(a, CatArt.BLACK);
             a.attackType = 3;
-            a.bodyTex = PixelArt.blackCatBody();
-            a.tailTex = PixelArt.blackCatTail();
-            a.tailX = 22;
-            a.eyeLX = 9;
-            a.eyeRX = 19;
-            a.eyeW = 4;
-            a.eyeH = 3;
-            a.eyeY = 18;
-            a.eyeCenterX = 15.5f;
-            a.eyeCenterY = 19f;
             a.furColor = C_BLACK_FUR;
             a.irisColor = C_AMBER;
-            a.pawTex = PixelArt.fromMap(PixelArt.PAW_BLACK);
+            a.lineColor = C_BLACK_LINE;   // light, like its outline
         } else if ("doge".equals(skin)) {
             a.eyeStyle = 1;
             a.attackType = 4;
-            a.bodyTex = PixelArt.dogeBody();
-            a.tailTex = PixelArt.dogeTail();
-            a.tailX = 22;
-            a.eyeLX = 13;
-            a.eyeRX = 19;
+            a.bodyTex = PixelArt.tex(DogArt.sitBody());
+            a.tailTex = frames(3, DogArt::sitTail);
+            a.walkTex = frames(4, DogArt::walk);
+            a.sleepTex = frames(2, DogArt::sleep);
+            a.rollTex = frames(2, DogArt::roll);
+            a.tailX = 26;
+            a.eyeLX = 10;
+            a.eyeRX = 21;
             a.eyeW = 3;
             a.eyeH = 2;      // a smug squint
             a.eyeY = 17;
@@ -145,50 +141,54 @@ public class SkinAssets {
             a.eyeCenterY = 18f;
             a.furColor = C_SHIBA;
             a.irisColor = C_IRIS_BROWN;
-            a.pawTex = PixelArt.fromMap(PixelArt.PAW_DOGE);
+            a.pawTex = PixelArt.tex(PathArt.paw(DogArt.SHIBA, PathArt.CREAM));
         } else if ("goldfish".equals(skin)) {
             a.eyeStyle = 1;
             a.attackType = 5;
             a.swims = true;
-            a.bodyTex = PixelArt.goldfishBody();
-            a.tailTex = PixelArt.goldfishTail();
+            a.bodyTex = PixelArt.tex(FishArt.body());
+            a.tailTex = frames(3, FishArt::tail);
             a.oneEye = true;
             a.tailX = 0;
-            a.eyeLX = 26;
-            a.eyeRX = 26;
+            a.eyeLX = 25;
+            a.eyeRX = 25;
             a.eyeW = 3;
             a.eyeH = 3;
-            a.eyeY = 12;
-            a.eyeCenterX = 27f;
-            a.eyeCenterY = 13f;
+            a.eyeY = 13;
+            a.eyeCenterX = 26.5f;
+            a.eyeCenterY = 14.5f;
             a.furColor = C_GOLDFISH;
             a.irisColor = C_IRIS_BROWN;
-            a.pawTex = PixelArt.fromMap(PixelArt.PAW_FIN);
+            a.pawTex = PixelArt.tex(PathArt.paw(FishArt.GOLDFISH, PathArt.ACC1));
         } else {
-            a.eyeStyle = 0;
+            catArt(a, CatArt.TABBY);
             a.attackType = 0;
-            a.bodyTex = PixelArt.fromMap(PixelArt.BODY);
-            a.tailTex = new Texture[] {
-                    PixelArt.fromMap(PixelArt.TAIL_A),
-                    PixelArt.fromMap(PixelArt.TAIL_B),
-                    PixelArt.fromMap(PixelArt.TAIL_C),
-            };
-            a.walkTex = frames(4, PoseArt::catWalk);
-            a.sleepTex = frames(2, PoseArt::catSleep);
-            a.rollTex = frames(2, PoseArt::catRoll);
-            a.tailX = 26;
-            a.eyeLX = 7;
-            a.eyeRX = 18;
-            a.eyeW = 4;
-            a.eyeH = 3;
-            a.eyeY = 15;
-            a.eyeCenterX = 14f;
-            a.eyeCenterY = 16f;
             a.furColor = C_ORANGE;
             a.irisColor = C_IRIS_GREEN;
-            a.pawTex = PixelArt.fromMap(PixelArt.PAW_CAT);
         }
         return a;
+    }
+
+    /**
+     * The hand-drawn cat art (CatArt), shared by every cat palette: sitting
+     * body with baked eye sockets, wagging tail, walk / sleep / roll poses.
+     */
+    private static void catArt(SkinAssets a, PathArt.Palette p) {
+        a.eyeStyle = 5;
+        a.bodyTex = PixelArt.tex(CatArt.sitBody(p));
+        a.tailTex = frames(3, f -> CatArt.sitTail(p, f));
+        a.walkTex = frames(4, f -> CatArt.walk(p, f));
+        a.sleepTex = frames(2, f -> CatArt.sleep(p, f));
+        a.rollTex = frames(2, f -> CatArt.roll(p, f));
+        a.pawTex = PixelArt.tex(CatArt.paw(p));
+        a.tailX = 23;
+        a.eyeLX = 8;
+        a.eyeRX = 20;
+        a.eyeW = 4;
+        a.eyeH = 4;
+        a.eyeY = 17;
+        a.eyeCenterX = 16f;
+        a.eyeCenterY = 19f;
     }
 
     private static Texture[] frames(int n, IntFunction<PoseArt.Grid> make) {

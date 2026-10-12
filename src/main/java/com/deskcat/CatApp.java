@@ -106,9 +106,10 @@ public class CatApp extends ApplicationAdapter {
     private int tailX;
     private int eyeLX, eyeRX, eyeW, eyeH, eyeY, eyeStyle;
     private float eyeCenterX, eyeCenterY;
-    private Color furColor, irisColor;
+    private Color furColor, irisColor, lineColor;
 
     private static final Color C_OUTLINE = Color.valueOf("26202A");
+    private static final Color C_PUPIL = Color.valueOf("120F16");
     private static final Color C_ORANGE = Color.valueOf("F29A4B");
     private static final Color C_YELLOW = Color.valueOf("F9D848");
     private static final Color C_BLUE = Color.valueOf("8CCFE8");
@@ -649,6 +650,7 @@ public class CatApp extends ApplicationAdapter {
         eyeCenterY = a.eyeCenterY;
         furColor = a.furColor;
         irisColor = a.irisColor;
+        lineColor = a.lineColor != null ? a.lineColor : C_OUTLINE;
         swims = a.swims;
         oneEye = a.oneEye;
         walkTex = a.walkTex;
@@ -1977,16 +1979,17 @@ public class CatApp extends ApplicationAdapter {
     /** Bristled fur: dark spikes off both flanks and a ridge on the skull. */
     private void drawHissFur(float shake) {
         float grown = Math.min(1f, (HISS_ARCH + SCRATCH_DUR - hissLeft) / 0.2f);
-        batch.setColor(C_OUTLINE);
+        batch.setColor(lineColor);
         for (int i = 0; i < 5; i++) {
             float y = 4f + i * 2.2f;
             float len = 1f + grown * 2f + (i % 2);
-            batch.draw(px, eyeCenterX - 8f - len + shake, y, len, 1f);
-            batch.draw(px, eyeCenterX + 7f + shake, y, len, 1f);
+            float side = i < 2 ? 12f : 10f;   // haunches flare wider than the chest
+            batch.draw(px, eyeCenterX - side - len + shake, y, len, 1f);
+            batch.draw(px, eyeCenterX + side - 1f + shake, y, len, 1f);
         }
         for (int i = -2; i <= 2; i++) {
             float h = 1f + grown * (2f - Math.abs(i) * 0.5f);
-            batch.draw(px, eyeCenterX + i * 2f - 0.5f + shake, eyeY + 6f, 1f, h);
+            batch.draw(px, eyeCenterX + i * 2f - 0.5f + shake, eyeY + 8f, 1f, h);
         }
         batch.setColor(Color.WHITE);
     }
@@ -2044,19 +2047,7 @@ public class CatApp extends ApplicationAdapter {
 
     private void drawOpenEye(float eyeX, int pgx, int irisY) {
         float gazeDown = kneadNow || digLeft > 0f ? -1f : gazeY;   // watch the paws
-        if (eyeStyle == 0) {
-            float irisX = eyeX + 1 + pgx;
-            batch.setColor(irisColor);
-            batch.draw(px, irisX, irisY, 2, 2);
-            batch.setColor(C_OUTLINE);
-            if (alertLeft > 0f || hissLeft > 0f || crouchLeft > 0f) {
-                batch.draw(px, irisX, irisY, 2, 2);   // wide startled pupils
-            } else {
-                float pupilX = irisX + (pgx >= 0 ? 1 : 0);
-                float pupilY = irisY + (gazeDown >= 0f ? 1 : 0);
-                batch.draw(px, pupilX, pupilY, 1, 1);
-            }
-        } else if (eyeStyle == 1) {
+        if (eyeStyle == 1) {
             // solid bead eye; the white glint wanders with the gaze and
             // vanishes while startled
             batch.setColor(C_OUTLINE);
@@ -2066,6 +2057,18 @@ public class CatApp extends ApplicationAdapter {
                 float glintX = eyeX + 1 + pgx;
                 float glintY = gazeDown >= 0f ? eyeY + eyeH - 1 : eyeY + eyeH - 2;
                 batch.draw(px, glintX, glintY, 1, 1);
+            }
+        } else if (eyeStyle == 5) {
+            // the iris and its ring are baked into the body; only the pupil
+            // and glint move. Startled: tall, blown pupils
+            batch.setColor(C_PUPIL);
+            if (alertLeft > 0f || hissLeft > 0f || crouchLeft > 0f) {
+                batch.draw(px, eyeX + 1, eyeY, 2, eyeH);
+            } else {
+                float pupilX = eyeX + 1 + pgx;
+                batch.draw(px, pupilX, irisY, 2, 2);
+                batch.setColor(Color.WHITE);
+                batch.draw(px, pupilX, irisY + 1, 1, 1);
             }
         } else if (eyeStyle == 4) {
             // round bead (corners cut) with a two-pixel glint following the gaze
@@ -2095,7 +2098,16 @@ public class CatApp extends ApplicationAdapter {
     }
 
     private void drawClosedEye(float eyeX) {
-        if (eyeStyle == 2) {
+        if (eyeStyle == 5) {
+            // fur over the socket (ring included), then a content curve
+            batch.setColor(furColor);
+            batch.draw(px, eyeX, eyeY - 1, eyeW, eyeH + 2);
+            batch.draw(px, eyeX - 1, eyeY, eyeW + 2, eyeH);
+            batch.setColor(lineColor);
+            batch.draw(px, eyeX, eyeY + 1, eyeW, 1);
+            batch.draw(px, eyeX - 1, eyeY + 2, 1, 1);
+            batch.draw(px, eyeX + eyeW, eyeY + 2, 1, 1);
+        } else if (eyeStyle == 2) {
             batch.setColor(furColor);
             batch.draw(px, eyeX - 1, eyeY - 1, eyeW + 2, eyeH + 2);
             batch.setColor(C_OUTLINE);

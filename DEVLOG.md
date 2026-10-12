@@ -404,10 +404,102 @@ shouting chick (cheek where a mouth goes, stubby ears), its belly-up pose
 showed both red cheeks where eyes belong, and Squirtle's shell with arm
 and leg holes read as a frowning face.
 
+## 22. Cats redrawn by hand (CatArt)
+
+Studying ComNyang's skins showed why they look so much cleaner than ours:
+every part is a hand-placed pixel staircase (they ship them as SVG paths),
+fills are flat with a few deliberate pattern pixels, and one uniform 1px
+outline is grown around the whole silhouette (an SVG `feMorphology`
+dilate) in a per-skin colour - white on their black cats. All their cats
+share one silhouette and differ only by colour regions.
+
+Both our cats now work that way, in new `CatArt` (our own silhouette, not
+theirs):
+
+- Parts are authored as absolute `M/H/V/Z` path strings and filled at pixel
+  centres (even-odd), so curves are exact staircases with no stray pixels.
+  Symmetric parts are drawn once and mirrored.
+- The canvas holds **zones** (fur, far-side fur, cream, inner ear, iris,
+  ring, pattern, crease...), and a `Palette` maps them to colours. The
+  tabby and the black cat are the same shapes through two palettes; the
+  black cat gets a light outline, whiskers and closed-eye line.
+- `mark()` paints stripes only over fur; `fillOver()` gives a part drawn
+  in front a soft crease where it overlaps earlier parts (sleeping head
+  against the body, tail along the loaf) instead of a hard inner outline.
+- `render()` dilates one outline around everything (8-neighbour, so
+  diagonal steps stay closed), then adds whiskers outside it.
+- New sitting body (28x30, eyes big and low), 3-frame tail, 4-frame trot,
+  2-frame sleeping loaf, 2-frame belly-up with folded front paws, and a
+  palette-coloured paw. The black cat gained poses for the first time.
+- Eye sockets (ring + iris) are baked in; new `eyeStyle 5` draws only the
+  2x2 pupil and glint (tall blown pupils when startled), and closes the
+  eye by covering the socket with fur and drawing a curve in the skin's
+  `lineColor`. Hiss bristles moved out to the wider body and use
+  `lineColor` so they show on the black cat.
+- Removed: the tabby char map and tails, the procedural black cat, the
+  old PoseArt cat poses, PAW_CAT/PAW_BLACK, and the unused eye style 0.
+
+First pass problems caught in the preview: the sleeping cat read as a box
+with an L-shaped crease (fixed by a rounder loaf and creases from
+`fillOver`), the belly-up legs read as a picket fence (front paws now
+fold short on the chest), and the walk's far ear was a round blob.
+
+## 23. Every skin redrawn in the path format
+
+After the cats (§22), the doge, goldfish, Pikachu and Squirtle were redrawn
+the same way, and the format moved out of `CatArt` into a shared `PathArt`
+(builder-style `Palette`, generic accent zones, `paint()` clipped to any
+zone, mirrored `fillPair`/`fillOverPair`/`paintPair`). Each skin has its own
+art file. Parts were authored as one span per row and converted to paths
+with a small script, then iterated in a preview that composes frames the
+way CatApp does (tail at `tailX`, body at `BODY_X`, runtime eyes).
+
+- **Doge**: wide face, cream cheeks/muzzle/eyebrow dots, upright ears,
+  curled tail with a cream swirl. New walk, sleep and belly-up poses reuse
+  the cat's body paths with a dog head (the first sleeping head read as a
+  cat until it got a snout; the first upside-down nose read as a moustache).
+- **Pikachu**: long black-tipped ears, cheeks on the head's edge, bolt
+  tail with a brown base, back stripes in side poses. Eyes widened to 4px -
+  at 3px the centred glint made them look like hollow rings - and the tail
+  moved out from behind the head where it read as a raised paw.
+- **Squirtle**: big head, brown shell edge with a cream rim around a
+  plated yellow belly, curled tail. The shell pose kept the opening where
+  the runtime peek eyes go; its curved seams again read as frowning brows
+  over a mouth, so it uses the walking shell's plate grid instead.
+- **Goldfish**: profile body with lighter belly, gill curve, a few scale
+  pixels, fins with rays, and a fuller forked fan tail whose lobes flutter
+  in opposition (thin lobes looked like two separate fins).
+- Runtime geometry (eye rects, Pikachu's cheek spark points, tail offsets)
+  updated in `SkinAssets`; eye styles and all behaviour code unchanged.
+- Removed: PixelArt's ellipse builder and the procedural Squirtle, doge
+  and goldfish; PoseArt's Pikachu/Squirtle poses and drawing helpers
+  (PoseArt is now just the pixel grid and the steam puff); paw char maps;
+  unused palette letters.
+
+### Pikachu, second pass
+
+The first path-format Pikachu still looked wrong (flat-topped box head,
+antenna ears, dot eyes, leaf tail), so it was redrawn to official
+proportions, approved as a preview before going in:
+
+- Onion-shaped head (narrow crown, widest at the cheeks), long leaf ears
+  standing almost upright with small black tips, 4x5 runtime eyes, round
+  cheeks lower on the face, an "w" mouth, a pear body, and a stepped bolt
+  tail standing clear of the head.
+- Volume: a shade tone (under the chin, right flank and cheekbone), a crown
+  highlight, and a dark-brown outline instead of near-black. Arms are solid
+  shaded shapes tucked under the chin - outlined arms read as noodles.
+- Poses redone to match. Walk: on all fours, ears swept back, cheek behind
+  the eye, back stripes, bolt tail. Sleep: on its tummy, chin on its paws,
+  ears angled up and back so they break the silhouette (flat ears' black
+  tips read as dirt). Belly-up: head in profile facing the sky - an
+  upside-down face read as a frown and hanging black-tipped ears as boots -
+  and a straight flag tail (the zigzag's notch read as an eye).
+
 ## Current state
 
-- **Skins**: Squirtle (default, procedural), Pikachu (character maps), the
-  original orange tabby, black cat, doge and goldfish — switchable live from
+- **Skins**: Squirtle (default), Pikachu, the original orange tabby, black
+  cat, doge and goldfish, all drawn in the path format — switchable live from
   the tray's Skin submenu, or at launch via `gradle run --args="doge"` etc.
 - **Behaviors**: eye tracking, blink, tail animation, mochi drag, petting
   hearts, keyboard kneading, startle, click attacks (water gun /
