@@ -515,6 +515,25 @@ approved as a preview first:
 - Shell/sleep and belly-up restyled to match (the opening stays where the
   runtime peek eyes go; the belly-up tail now attaches to the shell).
 
+## 24. Orphaned audio helpers after a hard kill
+
+While packaging v1.4.1, jpackage couldn't delete `build\dist\DeskCat`:
+seven `SystemAudio` PowerShell helpers were still running, each the child
+of a DeskCat or dev JVM that had been force-killed earlier that day (one
+from the morning), and one still held the folder as its working
+directory. The documented safety net — "a broken stdout pipe ends it" —
+never worked: .NET Framework's console stream silently ignores
+ERROR_BROKEN_PIPE on write, so `Console.WriteLine` kept "succeeding" and
+the loop ran forever.
+
+Fix: the JVM passes its own PID (`RuntimeMXBean` name, Java 8-safe) into
+the script, and `Meter.Run(parentPid)` loops only while that process is
+alive, so a hard-killed app takes its helper with it within one 200 ms
+tick. If the PID can't be read the helper runs unwatched as before.
+Verified with the dev build: one helper under the app, `Stop-Process
+-Force` on the JVM, helper gone within 0.5 s. A normal tray Exit still
+stops it through `dispose()`.
+
 ## Current state
 
 - **Skins**: Squirtle (default), Pikachu, the original orange tabby, black

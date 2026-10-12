@@ -2,6 +2,7 @@ package com.deskcat;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
+import java.lang.management.ManagementFactory;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 
@@ -93,13 +94,22 @@ final class SystemAudio {
                 "    int GetPeakValue(out float pfPeak);",
                 "}",
                 "public class Meter {",
-                "    public static void Run() {",
+                "    public static void Run(int parentPid) {",
+                // a broken stdout pipe does not stop us: .NET Framework's
+                // console stream swallows ERROR_BROKEN_PIPE on write, so a
+                // hard-killed app would leave this loop running forever.
+                // Watch the app's process instead.
+                "        System.Diagnostics.Process parent = null;",
+                "        if (parentPid > 0) {",
+                "            try { parent = System.Diagnostics.Process.GetProcessById(parentPid); }",
+                "            catch (ArgumentException) { return; }",
+                "        }",
                 "        var en = (IMMDeviceEnumerator)(new MMDeviceEnumeratorComObject());",
                 "        IMMDevice dev; en.GetDefaultAudioEndpoint(0, 1, out dev);",
                 "        var iid = typeof(IAudioMeterInformation).GUID;",
                 "        object o; dev.Activate(ref iid, 1, IntPtr.Zero, out o);",
                 "        var m = (IAudioMeterInformation)o;",
-                "        while (true) {",
+                "        while (parent == null || !parent.HasExited) {",
                 "            float p; m.GetPeakValue(out p);",
                 "            Console.WriteLine(p.ToString(\"F4\", System.Globalization.CultureInfo.InvariantCulture));",
                 "            Console.Out.Flush();",
@@ -110,8 +120,18 @@ final class SystemAudio {
                 "}");
         String ps = "$src = @'\n" + cs + "\n'@\n"
                 + "Add-Type -TypeDefinition $src\n"
-                + "[DeskCatMeter.Meter]::Run()\n";
+                + "[DeskCatMeter.Meter]::Run(" + ownPid() + ")\n";
         return Base64.getEncoder().encodeToString(
                 ps.getBytes(StandardCharsets.UTF_16LE));
+    }
+
+    /** This JVM's process id (the helper's parent), or -1 if unknown. */
+    private static long ownPid() {
+        try {
+            String name = ManagementFactory.getRuntimeMXBean().getName();
+            return Long.parseLong(name.substring(0, name.indexOf('@')));
+        } catch (RuntimeException e) {
+            return -1;   // the helper then runs unwatched, as before
+        }
     }
 }

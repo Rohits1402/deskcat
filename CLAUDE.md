@@ -66,8 +66,11 @@ Key mechanics that span the codebase:
   PowerShell helper subprocess (inline C# via Add-Type, `-EncodedCommand`,
   nothing on disk) that streams the Core Audio output PEAK LEVEL — one float
   per 200 ms. It must never capture audio samples; peak level only. The
-  helper dies with the app (dispose calls stop; a broken stdout pipe ends
-  it if the JVM is hard-killed).
+  helper dies with the app: dispose calls stop, and if the JVM is
+  hard-killed the helper sees its parent PID (passed in by `ownPid()`)
+  has exited and quits within one 200 ms tick. A broken stdout pipe does
+  NOT end it — .NET Framework's console stream swallows that write error,
+  which is how hard-killed apps used to leave helpers running forever.
 - Releases: bump `CatApp.VERSION` and the `fatJar` version in
   [build.gradle](build.gradle) together, move the "Unreleased" entries in
   `PatchNotes.NOTES` under the new version heading, run `gradle fatJar`, then
