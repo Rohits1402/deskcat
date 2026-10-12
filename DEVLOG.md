@@ -496,6 +496,25 @@ proportions, approved as a preview before going in:
   upside-down face read as a frown and hanging black-tipped ears as boots -
   and a straight flag tail (the zigzag's notch read as an eye).
 
+### Squirtle, second pass
+
+After v1.4.0 Squirtle was the odd one out (blocky box eyes, a flat line
+smile, a grid-of-chocolate belly), so it got the same treatment, again
+approved as a preview first:
+
+- The first draft's head was far too big; it was cut to ~15x20 (about half
+  the height), with a taller shell and belly below and a smaller tail curl.
+- Eyes switched to baked sockets + `eyeStyle 5` (like the cats): navy ring,
+  reddish-brown iris, runtime pupil and glint, closed with a navy curve
+  (`SkinAssets.lineColor`). Open smile with a tongue, crown highlight,
+  shaded right side, shell shade (`ACC2_FAR`) and shine (`CREAM_FAR`),
+  navy outline, arms angled out, toes.
+- Walk is now upright on two legs, the way Squirtle walks: shell on its
+  back with a cream rim along the front edge, plastron in front, a
+  swinging arm, stepping legs and the tail curl at the back.
+- Shell/sleep and belly-up restyled to match (the opening stays where the
+  runtime peek eyes go; the belly-up tail now attaches to the shell).
+
 ## Current state
 
 - **Skins**: Squirtle (default), Pikachu, the original orange tabby, black

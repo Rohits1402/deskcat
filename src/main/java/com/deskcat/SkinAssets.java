@@ -54,6 +54,8 @@ public class SkinAssets {
     private static final Color C_IRIS_BROWN = Color.valueOf("5B3A26");
     private static final Color C_BLACK_FUR = Color.valueOf("2E2936");
     private static final Color C_BLACK_LINE = Color.valueOf("ECE8F4");
+    private static final Color C_SQUIRT_IRIS = Color.valueOf("7A3528");
+    private static final Color C_NAVY = Color.valueOf("22313F");
     private static final Color C_AMBER = Color.valueOf("F2C14E");
     private static final Color C_SHIBA = Color.valueOf("D9A066");
     private static final Color C_GOLDFISH = Color.valueOf("FF8C3A");
@@ -74,7 +76,7 @@ public class SkinAssets {
     private static SkinAssets load(String skin) {
         SkinAssets a = new SkinAssets();
         if ("squirtle".equals(skin)) {
-            a.eyeStyle = 2;
+            a.eyeStyle = 5;      // baked sockets, moving pupils
             a.attackType = 2;
             a.bodyTex = PixelArt.tex(SquirtArt.sitBody());
             a.tailTex = frames(3, SquirtArt::sitTail);
@@ -84,16 +86,17 @@ public class SkinAssets {
             a.shellTex = PixelArt.tex(SquirtArt.shell(false, 0));
             a.shellEyeX = 13;
             a.shellEyeY = 6;
-            a.tailX = 24;
-            a.eyeLX = 10;
+            a.tailX = 25;
+            a.eyeLX = 9;
             a.eyeRX = 21;
-            a.eyeW = 3;
+            a.eyeW = 4;
             a.eyeH = 4;
             a.eyeY = 16;
             a.eyeCenterX = 17f;
             a.eyeCenterY = 18f;
             a.furColor = C_BLUE;
-            a.irisColor = C_IRIS_BROWN;
+            a.irisColor = C_SQUIRT_IRIS;
+            a.lineColor = C_NAVY;
             a.pawTex = PixelArt.tex(PathArt.paw(SquirtArt.SQUIRT, PathArt.FUR));
         } else if ("pikachu".equals(skin)) {
             a.eyeStyle = 4;      // round beads, drawn at runtime
