@@ -96,7 +96,7 @@ flavors:
   have Java 8+:
 
 ```
-java -jar deskcat-1.3.0.jar
+java -jar deskcat-1.4.0.jar
 ```
 
 The app checks GitHub Releases for a newer version shortly after startup
