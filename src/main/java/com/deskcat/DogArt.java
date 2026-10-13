@@ -1,5 +1,6 @@
 package com.deskcat;
 
+import static com.deskcat.Gait.*;
 import static com.deskcat.PathArt.*;
 
 /**
@@ -76,112 +77,141 @@ final class DogArt {
 
     // =============================================================== WALK
 
-    static final String W_HEAD = "M21 3H27V4H28V6H29V7H31V8H32V10H31V11H29V12H22V11H21V10H20V4H21Z";
-    static final String W_MUZZLE = "M25 8H31V9H32V10H31V11H29V12H23V10H24V9H25Z";
-    static final String W_EAR = "M25 0H26V1H27V3H23V2H24V1H25Z";
-    static final String W_FAR_EAR = "M21 1H22V2H23V3H21Z";
-    static final String W_TAIL = "M7 4H11V5H12V9H11V10H7V9H6V8H5V6H6V5H7Z";
+    /*
+     * Side view on the sitting doge's proportions: big head with cream
+     * cheeks and muzzle, small upright ears, eyebrow dot, chunky body with a
+     * cream underside, short thick legs in white socks, tail curled over the
+     * back. 38x30, ground row 28.
+     */
+    static final String D_HEAD = "M23 4H29V5H31V6H32V7H33V14H32V16H31V17H29V18H23V17H21V16H20V15H19V7H20V6H21V5H23Z";
+    static final String D_MUZZLE = "M29 10H34V11H36V14H35V15H33V16H29V15H28V11H29Z";
+    static final String D_CHEEK = "M22 12H29V13H31V14H32V16H31V17H29V18H24V17H23V16H22V15H21V13H22Z";
+    static final String D_EAR = "M28 1H29V2H30V4H31V5H25V4H26V3H27V2H28Z";
+    static final String D_EAR_IN = "M27 3H29V4H27Z";
+    static final String D_FAR_EAR = "M22 2H23V3H24V5H21V3H22Z";
+    static final String D_TAIL = "M8 7H12V8H13V12H12V13H8V12H7V11H6V9H7V8H8Z";
 
-    /** Side-view trot facing right, tail curled over the back; 4 frames, 32x24. */
-    static PoseArt.Grid walk(int frame) {
-        Canvas c = new Canvas(32, 24);
-        int[] adx = {1, 0, -1, 0}, alift = {0, 0, 0, 1};
-        int[] bdx = {-1, 0, 1, 0}, blift = {0, 1, 0, 0};
-        leg(c, 21 + bdx[frame], blift[frame], false);
-        leg(c, 10 + adx[frame], alift[frame], false);
-        fill(c, W_FAR_EAR, FUR_FAR);
-        fill(c, CatArt.W_BODY, FUR);
-        fill(c, W_TAIL, FUR);
-        rect(c, 7, 6, 3, 2, CREAM);          // cream underside of the curl
-        px(c, 8, 6, FUR);
-        shiftRows(c, 0, 9, new int[] {0, 1, 0, -1}[frame]);
-        fill(c, W_HEAD, FUR);
-        fill(c, W_EAR, FUR);
-        px(c, 25, 1, INNER_EAR);
-        px(c, 24, 2, INNER_EAR);
-        px(c, 25, 2, INNER_EAR);
-        fill(c, CatArt.W_CHEST, CREAM);
-        fill(c, W_MUZZLE, CREAM);
-        leg(c, 19 + adx[frame], alift[frame], true);
-        leg(c, 8 + bdx[frame], blift[frame], true);
-        rect(c, 24, 5, 2, 2, PUPIL);         // eye
-        px(c, 24, 5, GLINT);
-        px(c, 25, 4, CREAM);                 // eyebrow dot
-        rect(c, 30, 7, 2, 1, NOSE);
-        px(c, 31, 8, NOSE);
-        px(c, 29, 10, MOUTH);
+    /** Walking, facing right; 8 frames, 38x30. */
+    static PoseArt.Grid walk(int f) {
+        Canvas c = new Canvas(38, 30);
+        int b = BOB[f], hb = headBob(f);
+        int gy = 28;
+        draw(c, hind(c, 14, 20 + b, gy, (f + 4) % 8), false, CREAM_FAR, 2);
+        draw(c, front(c, 25, 20 + b, gy, (f + 2) % 8), false, CREAM_FAR, 2);
+        draw(c, hind(c, 10, 20 + b, gy, f), true, CREAM, 2);
+        draw(c, front(c, 21, 20 + b, gy, (f + 6) % 8), true, CREAM, 2);
+        fill(c, D_FAR_EAR, FUR_FAR, 0, hb, false);
+        fill(c, CatArt.C_BODY, FUR, 0, b, false);
+        paint(c, 0, 22 + b, 38, 2, FUR, CREAM);       // cream underside
+        fill(c, CatArt.C_CHEST, CREAM, 0, b, false);
+        // the curled tail on its back, wagging
+        Canvas t = new Canvas(38, 30);
+        fill(t, D_TAIL, FUR, 0, b, false);
+        rect(t, 8, 9 + b, 3, 2, CREAM);
+        px(t, 9, 9 + b, FUR);
+        shiftRows(t, 0, 13 + b, new int[] {0, 1, 1, 0, 0, -1, -1, 0}[f]);
+        paste(c, t, 0, 0, false);
+        fillOver(c, D_HEAD, FUR, 0, hb, false);
+        fill(c, D_EAR, FUR, 0, hb, false);
+        fill(c, D_EAR_IN, INNER_EAR, 0, hb, false);
+        fill(c, D_CHEEK, CREAM, 0, hb, false);
+        fill(c, D_MUZZLE, CREAM, 0, hb, false);
+        mark(c, 24, 5 + hb, 2, 1);                   // darker brow
+        rect(c, 28, 8 + hb, 2, 2, PUPIL);            // eye
+        px(c, 28, 8 + hb, GLINT);
+        rect(c, 28, 6 + hb, 2, 1, CREAM);            // eyebrow dot
+        rect(c, 34, 10 + hb, 2, 2, NOSE);
+        px(c, 33, 13 + hb, MOUTH);
+        px(c, 32, 14 + hb, MOUTH);
         return render(c, SHIBA);
-    }
-
-    private static void leg(Canvas c, int x, int lift, boolean near) {
-        int w = near ? 3 : 2;
-        rect(c, x, 17, w, 4 - lift, near ? FUR : FUR_FAR);
-        rect(c, x, 21 - lift, w, 2, near ? CREAM : CREAM_FAR);
     }
 
     // ============================================================== SLEEP
 
-    /** Curled up, nose tucked under the tail; 2 breaths, 30x18. */
-    static PoseArt.Grid sleep(int frame) {
-        int o = 1;                           // room for the snout on the left
-        Canvas c = new Canvas(31, 18);
-        fill(c, frame == 0 ? CatArt.L_BODY : CatArt.L_BODY_IN, FUR, o, 0, false);
-        fillOver(c, CatArt.L_TAIL, FUR, o, 0, false);
-        paint(c, 12 + o, 16, 13, 1, FUR, CREAM);   // cream underside of the tail
-        fillOver(c, CatArt.L_HEAD, FUR, o, 0, false);
-        fill(c, CatArt.L_EAR_L, FUR, o, 0, false);
-        fill(c, CatArt.L_EAR_R, FUR, o, 0, false);
-        px(c, 3 + o, 6, INNER_EAR);
-        px(c, 4 + o, 6, INNER_EAR);
-        px(c, 8 + o, 6, INNER_EAR);
-        px(c, 9 + o, 6, INNER_EAR);
-        rect(c, 0, 12, 2, 3, FUR);           // snout poking out past the cheek
-        rect(c, 0, 13, 7, 2, CREAM);         // muzzle and cheeks
-        rect(c, 2, 15, 7, 1, CREAM);
-        rect(c, 8, 13, 3, 2, CREAM);
-        rect(c, 0, 12, 2, 1, NOSE);
-        px(c, 3 + o, 9, CREAM);              // eyebrow dots
-        px(c, 8 + o, 9, CREAM);
-        for (int ex : new int[] {3, 8}) {
-            px(c, ex, 11, LINE);
-            px(c, ex + 1, 11, LINE);
-            px(c, ex + 2, 11, LINE);
+    /** The sitting doge's head on a 30x22 canvas, eyes closed: happy or asleep. */
+    private static Canvas closedHead(boolean happy) {
+        Canvas h = new Canvas(30, 22);
+        fillPair(h, SIT_EAR, FUR);
+        fill(h, SIT_HEAD, FUR);
+        fillPair(h, SIT_EAR_IN, INNER_EAR);
+        fillPair(h, SIT_CHEEK, CREAM);
+        fill(h, SIT_MUZZLE, CREAM);
+        fill(h, SIT_NOSE, NOSE);
+        px(h, 14, 15, MOUTH);
+        px(h, 15, 15, MOUTH);
+        px(h, 13, 16, MOUTH);
+        px(h, 16, 16, MOUTH);
+        rect(h, 9, 9, 2, 1, CREAM);                  // eyebrow dots
+        rect(h, 19, 9, 2, 1, CREAM);
+        mark(h, 14, 7, 2, 1);
+        for (int ex : new int[] {8, 19}) {
+            if (happy) {
+                rect(h, ex, 11, 3, 1, LINE);
+                px(h, ex - 1, 12, LINE);
+                px(h, ex + 3, 12, LINE);
+            } else {
+                rect(h, ex, 12, 3, 1, LINE);
+            }
         }
+        return h;
+    }
+
+    static final String LOAF = "M26 7H34V8H36V9H37V20H36V21H35V22H25V21H24V20H23V9H24V8H26Z";
+    static final String LOAF_IN = "M26 6H34V7H36V8H37V20H36V21H35V22H25V21H24V20H23V8H24V7H26Z";
+    static final String LOAF_TAIL = "M30 3H35V4H36V5H37V8H36V9H35V10H30V9H29V8H28V4H30Z";
+
+    /** Curled up: the sitting head on its paws, loaf behind, curled tail on top; 2 breaths, 38x23. */
+    static PoseArt.Grid sleep(int frame) {
+        Canvas c = new Canvas(38, 23);
+        int lift = frame == 0 ? 2 : 1;
+        fill(c, frame == 0 ? LOAF : LOAF_IN, FUR);
+        paint(c, 0, 20, 38, 2, FUR, CREAM);          // cream underside
+        fillOver(c, LOAF_TAIL, FUR, 0, lift, false);
+        rect(c, 31, 5 + lift, 3, 2, CREAM);
+        px(c, 32, 5 + lift, FUR);
+        Canvas front = new Canvas(38, 23);
+        paste(front, closedHead(false), 0, -2, false);
+        creasePaste(c, front);
+        rect(c, 8, 19, 4, 2, CREAM);                 // paws under the chin
+        rect(c, 18, 19, 4, 2, CREAM);
+        px(c, 10, 20, SEP);
+        px(c, 20, 20, SEP);
         return render(c, SHIBA);
     }
 
     // =============================================================== ROLL
 
-    /** Belly-up with paws in the air; 2 wiggle frames, 32x20. */
+    /** The whole sitting doge (tail, body, face) as zones, grinning. 36x30. */
+    private static Canvas delighted() {
+        Canvas c = new Canvas(36, 30);
+        Canvas t = new Canvas(12, 23);
+        fill(t, SIT_TAIL, FUR);
+        fill(t, SIT_TAIL_IN, CREAM);
+        px(t, 5, 6, FUR);
+        px(t, 6, 7, FUR);
+        paste(c, t, 24, 7, false);
+        Canvas b = new Canvas(30, 30);
+        fill(b, SIT_BODY, FUR);
+        paste(b, closedHead(true), 0, 0, false);
+        rect(b, 13, 16, 4, 1, MOUTH);                // open grin
+        rect(b, 14, 17, 2, 1, INNER_EAR);
+        fill(b, SIT_CHEST, CREAM);
+        fillOver(b, SIT_LEG, FUR, 0, 0, false);
+        fillOver(b, SIT_LEG, FUR, 0, 0, true);
+        paintPair(b, 7, 27, 4, 3, FUR, CREAM);
+        rect(b, 4, 28, 2, 2, CREAM);
+        rect(b, 24, 28, 2, 2, CREAM);
+        paste(c, b, 0, 0, false);
+        return c;
+    }
+
+    /** Rolled onto its back: the sitting doge upside down, socks paddling; 2 frames, 36x30. */
     static PoseArt.Grid roll(int frame) {
-        Canvas c = new Canvas(32, 20);
-        int[][] legs = {{13, 7, 0}, {16, 7, 1}, {21, 5, 1}, {24, 5, 0}};
-        for (int[] l : legs) {
-            int y = l[1] - ((l[2] + frame) % 2);
-            boolean near = l[0] == 13 || l[0] == 24;
-            rect(c, l[0], y, 2, 9 - y, near ? FUR : FUR_FAR);
-            rect(c, l[0], y, 2, 2, near ? CREAM : CREAM_FAR);
-        }
-        rect(c, 27, 10, 3, 3, FUR);          // curled tail on the ground
-        rect(c, 28, 11, 1, 1, CREAM);
-        fill(c, CatArt.R_BODY, FUR);
-        fill(c, CatArt.R_BELLY, CREAM);
-        fill(c, CatArt.R_EAR_L, FUR);
-        fill(c, CatArt.R_EAR_R, FUR);
-        fillOver(c, CatArt.R_HEAD, FUR);
-        px(c, 3, 17, INNER_EAR);
-        px(c, 9, 17, INNER_EAR);
-        rect(c, 2, 7, 8, 3, CREAM);          // muzzle and cheeks, upside down
-        rect(c, 5, 7, 2, 1, NOSE);
-        px(c, 5, 9, MOUTH);
-        px(c, 6, 9, MOUTH);
-        px(c, 3, 14, CREAM);                 // eyebrow dots
-        px(c, 8, 14, CREAM);
-        for (int ex : new int[] {2, 7}) {    // happy squint
-            px(c, ex, 12, LINE);
-            px(c, ex + 1, 13, LINE);
-            px(c, ex + 2, 12, LINE);
-        }
+        Canvas f = new Canvas(36, 30);
+        paste(f, delighted(), 0, 0, true);
+        Canvas c = new Canvas(36, 30);
+        paste(c, f, 0, 1, false);                    // its paws reach the sitting frame's last row
+        shiftRows(c, 1, 3, frame == 0 ? 0 : 1);
         return render(c, SHIBA);
     }
 }

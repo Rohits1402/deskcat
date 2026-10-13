@@ -29,7 +29,7 @@ final class SoundFx {
     static volatile float volume = 0.8f;
 
     private static short[] meowPcm, pikaPcm, squirtlePcm, splashPcm, chirpPcm;
-    private static short[] hissPcm, borkPcm, blubPcm;
+    private static short[] hissPcm, borkPcm, blubPcm, vinePcm;
 
     private static Sound meowClip;
     private static boolean meowClipTried;
@@ -129,6 +129,14 @@ final class SoundFx {
             blubPcm = buildBlub();
         }
         play(blubPcm);
+    }
+
+    /** Bulbasaur: a two-note "bul-ba" call, then the crack of a vine whip. */
+    static void vineWhip() {
+        if (vinePcm == null) {
+            vinePcm = buildVineWhip();
+        }
+        play(vinePcm);
     }
 
     private static void play(final short[] pcm) {
@@ -369,6 +377,50 @@ final class SoundFx {
                 }
             }
             s[i] = (short) (clip(v) * Short.MAX_VALUE);
+        }
+        return s;
+    }
+
+    private static short[] buildVineWhip() {
+        double dur = 0.58;
+        int n = (int) (RATE * dur);
+        short[] s = new short[n];
+        Random rnd = new Random(31);
+        double ph = 0;
+        double[] r1 = new double[2];
+        double[] r2 = new double[2];
+        double prev = 0;
+        for (int i = 0; i < n; i++) {
+            double t = i / (double) RATE;
+            double v = 0;
+            // two soft voiced syllables, the second lower: "bul - ba"
+            double[][] syl = {{0.00, 0.13, 300, 340}, {0.16, 0.30, 270, 225}};
+            for (double[] y : syl) {
+                if (t >= y[0] && t < y[1]) {
+                    double u = (t - y[0]) / (y[1] - y[0]);
+                    ph += 2 * Math.PI * (y[2] + (y[3] - y[2]) * u) / RATE;
+                    double src = 0;
+                    for (int k = 1; k <= 5; k++) {
+                        src += Math.sin(ph * k) / k;
+                    }
+                    double env = Math.min(1, u / 0.12) * Math.min(1, (1 - u) / 0.25);
+                    v += reson(src, 650, 0.93, r1) * env * 0.9;
+                }
+            }
+            // the whip: a rising whoosh, then a sharp high crack
+            if (t >= 0.34 && t < 0.44) {
+                double u = (t - 0.34) / 0.10;
+                double noise = rnd.nextDouble() * 2 - 1;
+                v += reson(noise, 1200 + 2800 * u, 0.85, r2) * u * 0.35;
+            }
+            if (t >= 0.44 && t < 0.47) {
+                double u = (t - 0.44) / 0.03;
+                double noise = rnd.nextDouble() * 2 - 1;
+                double hp = noise - prev;               // crude high-pass for a crisp snap
+                prev = noise;
+                v += hp * Math.pow(1 - u, 2) * 0.9;
+            }
+            s[i] = (short) (clip(v) * Short.MAX_VALUE * 0.8);
         }
         return s;
     }

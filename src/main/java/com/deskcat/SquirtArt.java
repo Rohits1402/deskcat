@@ -1,5 +1,6 @@
 package com.deskcat;
 
+import static com.deskcat.Gait.*;
 import static com.deskcat.PathArt.*;
 
 /**
@@ -104,57 +105,59 @@ final class SquirtArt {
 
     // =============================================================== WALK
 
-    static final String W_HEAD = "M16 2H23V3H25V4H26V5H27V12H26V13H25V14H23V15H16V14H14V13H13V12H12V5H13V4H14V3H16Z";
+    static final String W_HEAD = "M16 1H24V2H26V3H27V4H28V5H29V12H28V13H27V14H25V15H16V14H14V13H13V12H12V4H13V3H14V2H16Z";
+    static final String W_RING = "M23 5H26V6H27V10H26V11H23V10H22V6H23Z";
+    static final String W_IRIS = "M24 6H26V10H24V9H23V7H24Z";
     static final String W_BODY = "M14 13H23V14H24V21H23V22H22V23H21V24H14V23H13V22H12V21H11V16H12V15H13V14H14Z";
     static final String W_SHELL = "M9 12H15V13H16V14H17V23H16V24H14V25H9V24H7V23H6V22H5V15H6V14H7V13H9Z";
-    static final String W_EYE = "M21 6H24V7H25V10H24V11H21V10H20V7H21Z";
     static final String W_ARM = "M17 15H20V16H21V18H22V19H18V17H17Z";
-    static final String W_TAIL = "M2 18H6V19H7V22H6V23H2V22H1V19H2Z";
+    static final String W_TAIL = "M2 14H5V15H6V17H7V19H8V21H5V20H3V19H2V18H1V15H2Z";
 
     /**
-     * Walking upright facing right, the way Squirtle does: shell on its
-     * back, belly in front, arm swinging, legs stepping; 4 frames, 30x29.
+     * Walking upright facing right, the way Squirtle does: head as big as
+     * the sitting head with the same socketed eye, shell on its back with a
+     * cream rim, plastron in front, arm swinging, legs stepping heel to toe,
+     * tail curling up behind; 8 frames, 30x30.
      */
-    static PoseArt.Grid walk(int frame) {
-        Canvas c = new Canvas(30, 29);
-        int[] adx = {2, 0, -2, 0}, alift = {0, 0, 0, 1};
-        int[] bdx = {-2, 0, 2, 0}, blift = {0, 1, 0, 0};
-        fill(c, W_TAIL, FUR);
-        swirl(c, 2, 19);
-        leg(c, 12 + bdx[frame], blift[frame], false);
-        fill(c, W_BODY, ACC3);
-        paint(c, 17, 16, 7, 1, ACC3, ACC4);         // plastron plates
-        paint(c, 17, 19, 7, 1, ACC3, ACC4);
-        fill(c, W_SHELL, ACC1);
-        paint(c, 5, 21, 12, 4, ACC1, ACC2_FAR);     // underside of the shell in shade
-        paint(c, 5, 17, 10, 1, ACC1, ACC1_FAR);     // scute seams
-        paint(c, 10, 13, 1, 4, ACC1, ACC1_FAR);
-        paint(c, 8, 18, 1, 3, ACC1, ACC1_FAR);
-        paint(c, 12, 18, 1, 3, ACC1, ACC1_FAR);
-        paint(c, 8, 13, 2, 1, ACC1, CREAM_FAR);     // shine
-        paint(c, 15, 13, 2, 11, ACC1, ACC2);        // cream rim along the front edge
-        paint(c, 15, 13, 2, 11, ACC2_FAR, ACC2);
-        leg(c, 16 + adx[frame], alift[frame], true);
-        fillOver(c, W_HEAD, FUR);
-        paint(c, 12, 12, 16, 3, FUR, FUR_FAR);      // under the jaw
-        paint(c, 15, 3, 4, 1, FUR, CREAM);          // crown highlight
-        paint(c, 14, 4, 2, 1, FUR, CREAM);
-        fill(c, W_EYE, RING);
-        rect(c, 21, 7, 2, 3, IRIS);
-        rect(c, 22, 8, 1, 2, PUPIL);
-        px(c, 21, 7, GLINT);
-        px(c, 21, 11, MOUTH);                       // open smile toward the front
-        rect(c, 22, 12, 3, 1, MOUTH);
-        rect(c, 23, 11, 2, 1, INNER_EAR);
-        px(c, 25, 11, MOUTH);
-        px(c, 26, 10, MOUTH);
-        fillOver(c, W_ARM, FUR, new int[] {-1, 0, 1, 0}[frame], 0, false);
+    static PoseArt.Grid walk(int f) {
+        Canvas c = new Canvas(30, 30);
+        int b = BOB[f], hb = headBob(f);
+        int gy = 28;
+        fill(c, W_TAIL, FUR, 0, 1 + b, false);
+        int[][] swirl = {{2, 16}, {3, 16}, {4, 17}, {3, 18}, {2, 17}};
+        for (int[] s : swirl) {
+            paint(c, s[0], s[1] + b, 1, 1, FUR, FUR_FAR);
+        }
+        shiftRows(c, 0, 18 + b, SWAY[f] > 0 ? 1 : (SWAY[f] < 0 ? -1 : 0));
+        draw(c, footLeg(c, 13, 23 + b, gy, (f + 4) % 8, 4, 5), false, FUR_FAR);
+        draw(c, footLeg(c, 17, 23 + b, gy, f, 4, 5), true, FUR);
+        fill(c, W_BODY, ACC3, 0, b, false);
+        paint(c, 17, 16 + b, 7, 1, ACC3, ACC4);      // plastron plates
+        paint(c, 17, 19 + b, 7, 1, ACC3, ACC4);
+        fill(c, W_SHELL, ACC1, 0, b, false);
+        paint(c, 5, 21 + b, 12, 4, ACC1, ACC2_FAR);  // underside in shade
+        paint(c, 5, 17 + b, 10, 1, ACC1, ACC1_FAR);  // scute seams
+        paint(c, 10, 13 + b, 1, 4, ACC1, ACC1_FAR);
+        paint(c, 8, 18 + b, 1, 3, ACC1, ACC1_FAR);
+        paint(c, 12, 18 + b, 1, 3, ACC1, ACC1_FAR);
+        paint(c, 8, 13 + b, 2, 1, ACC1, CREAM_FAR);  // shine
+        paint(c, 15, 13 + b, 2, 11, ACC1, ACC2);     // cream rim along the front edge
+        paint(c, 15, 13 + b, 2, 11, ACC2_FAR, ACC2);
+        fillOver(c, W_HEAD, FUR, 0, hb, false);
+        paint(c, 12, 12 + hb, 17, 3, FUR, FUR_FAR);  // under the jaw
+        paint(c, 15, 2 + hb, 5, 1, FUR, CREAM);      // crown highlight
+        paint(c, 14, 3 + hb, 2, 1, FUR, CREAM);
+        fill(c, W_RING, RING, 0, hb, false);
+        fill(c, W_IRIS, IRIS, 0, hb, false);
+        rect(c, 24, 7 + hb, 2, 2, PUPIL);
+        px(c, 24, 7 + hb, GLINT);
+        px(c, 22, 11 + hb, MOUTH);                   // open smile with a tongue
+        rect(c, 23, 12 + hb, 4, 1, MOUTH);
+        rect(c, 24, 11 + hb, 3, 1, INNER_EAR);
+        px(c, 27, 11 + hb, MOUTH);
+        px(c, 28, 10 + hb, MOUTH);
+        outlined(c, W_ARM, FUR, ARM_DX[f], 1 + b);
         return render(c, SQUIRT);
-    }
-
-    /** A stubby leg under the body; lift raises the foot a row. */
-    private static void leg(Canvas c, int x, int lift, boolean near) {
-        rect(c, x, 22, 4, 6 - lift, near ? FUR : FUR_FAR);
     }
 
     // ============================================================== SHELL
@@ -204,41 +207,39 @@ final class SquirtArt {
 
     // =============================================================== ROLL
 
-    static final String R_SHELL = "M7 13H27V14H28V18H27V19H25V20H22V21H12V20H9V19H7V18H6V14H7Z";
-    static final String R_BELLY = "M11 9H23V10H25V11H26V13H8V11H9V10H11Z";
-    static final String R_HEAD = "M3 9H9V10H10V11H11V15H10V16H9V17H3V16H2V15H1V11H2V10H3Z";
-
-    /** On its back on the shell, legs pedalling; 2 frames, 32x22. */
+    /** Rolled onto its back: the sitting Squirtle upside down, happy, feet paddling; 2 frames, 36x27. */
     static PoseArt.Grid roll(int frame) {
-        Canvas c = new Canvas(32, 22);
-        int[][] legs = {{11, 5, 0}, {14, 5, 1}, {20, 5, 1}, {23, 5, 0}};
-        for (int[] l : legs) {
-            int y = l[1] - ((l[2] + frame) % 2);
-            boolean near = l[0] == 11 || l[0] == 23;
-            rect(c, l[0], y, 3, 10 - y, near ? FUR : FUR_FAR);
+        Canvas s = new Canvas(36, 30);
+        Canvas t = new Canvas(12, 23);
+        fill(t, SIT_TAIL, FUR);
+        paste(s, t, 23, 7, false);
+        Canvas b = new Canvas(30, 30);
+        fill(b, SIT_SHELL, ACC1);
+        paint(b, 23, 17, 7, 13, ACC1, ACC2_FAR);
+        fill(b, SIT_RIM, ACC2);
+        fill(b, SIT_BELLY, ACC3);
+        paint(b, 9, 22, 12, 1, ACC3, ACC4);
+        paint(b, 8, 25, 14, 1, ACC3, ACC4);
+        paint(b, 14, 19, 2, 3, ACC3, ACC4);
+        fillOverPair(b, SIT_ARM, FUR);
+        fillOverPair(b, SIT_FOOT, FUR);
+        fillOver(b, SIT_HEAD, FUR);
+        paint(b, 21, 10, 9, 7, FUR, FUR_FAR);
+        paint(b, 17, 17, 9, 3, FUR, FUR_FAR);
+        paint(b, 10, 6, 4, 1, FUR, CREAM);
+        paint(b, 8, 7, 3, 1, FUR, CREAM);
+        for (int ex : new int[] {7, 19}) {
+            rect(b, ex, 11, 4, 1, LINE);             // ^ ^
+            px(b, ex - 1, 12, LINE);
+            px(b, ex + 4, 12, LINE);
         }
-        rect(c, 26, 10, 4, 4, FUR);          // tail curling up off the shell
-        swirl(c, 26, 10);
-        fill(c, R_BELLY, ACC3);
-        for (int x = 13; x <= 22; x += 3) {
-            paint(c, x, 10, 1, 3, ACC3, ACC4);
-        }
-        fill(c, R_SHELL, ACC1);
-        paint(c, 0, 13, 32, 1, ACC1, ACC2);  // rim
-        paint(c, 6, 17, 22, 4, ACC1, ACC2_FAR);
-        paint(c, 10, 16, 14, 1, ACC1, ACC1_FAR);
-        paint(c, 15, 14, 1, 2, ACC1, ACC1_FAR);
-        paint(c, 20, 14, 1, 2, ACC1, ACC1_FAR);
-        fillOver(c, R_HEAD, FUR);
-        paint(c, 3, 10, 3, 1, FUR, CREAM);   // highlight
-        paint(c, 2, 15, 9, 2, FUR, FUR_FAR);
-        px(c, 3, 12, LINE);                  // happy closed eye
-        rect(c, 4, 11, 2, 1, LINE);
-        px(c, 6, 12, LINE);
-        px(c, 7, 13, MOUTH);                 // open grin with a tongue
-        rect(c, 8, 14, 2, 1, MOUTH);
-        px(c, 10, 13, MOUTH);
-        rect(c, 8, 13, 2, 1, INNER_EAR);
+        smile(b, 11, 15);
+        paste(s, b, 0, 0, false);
+        Canvas f = new Canvas(36, 30);
+        paste(f, s, 0, 0, true);
+        Canvas c = new Canvas(36, 27);
+        paste(c, f, 0, 1, false);
+        shiftRows(c, 1, 3, frame == 0 ? 0 : 1);
         return render(c, SQUIRT);
     }
 }

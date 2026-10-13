@@ -120,7 +120,7 @@ public class CatApp extends ApplicationAdapter {
     private OrthographicCamera cam, fboCam;
     private FrameBuffer fbo;
     private TextureRegion fboRegion;
-    private Texture bodyTex, heartTex, zzzTex, alertTex, sparkTex, pawTex, px;
+    private Texture bodyTex, heartTex, zzzTex, alertTex, sparkTex, leafTex, pawTex, px;
     private Texture waterDropTex, noteTex;
     private Texture[] tailTex;
 
@@ -170,6 +170,10 @@ public class CatApp extends ApplicationAdapter {
     private static final float SCRATCH_DUR = 0.6f;
     private float scratchLeft;
     private int scratchDir = 1;
+    // Bulbasaur's Vine Whip: a vine lashes out of each side of the bulb
+    private static final float VINE_DUR = 0.7f;
+    private float vineLeft;
+    private boolean vineCracked;
     private final ArrayList<float[]> bolts = new ArrayList<float[]>();
     private float waterLeft, dropIn;
     // black cat bristles before it swipes; doge digs; goldfish puffs up
@@ -298,6 +302,7 @@ public class CatApp extends ApplicationAdapter {
         zzzTex = PixelArt.fromMap(PixelArt.ZZZ);
         alertTex = PixelArt.fromMap(PixelArt.ALERT);
         sparkTex = PixelArt.fromMap(PixelArt.SPARK);
+        leafTex = PixelArt.fromMap(PixelArt.LEAF);
         px = PixelArt.pixel();
 
         fbo = new FrameBuffer(Pixmap.Format.RGBA8888, FBO_W, FBO_H, false);
@@ -666,6 +671,7 @@ public class CatApp extends ApplicationAdapter {
         boltLeft = 0f;
         waterLeft = 0f;
         scratchLeft = 0f;
+        vineLeft = 0f;
         hissLeft = 0f;
         digLeft = 0f;
         puffLeft = 0f;
@@ -712,9 +718,9 @@ public class CatApp extends ApplicationAdapter {
     }
 
     private static final String[] SKINS =
-            {"squirtle", "pikachu", "cat", "blackcat", "doge", "goldfish"};
+            {"squirtle", "pikachu", "cat", "blackcat", "doge", "goldfish", "bulbasaur"};
     private static final String[] SKIN_LABELS =
-            {"Squirtle", "Pikachu", "Cat", "Black cat", "Doge", "Goldfish"};
+            {"Squirtle", "Pikachu", "Cat", "Black cat", "Doge", "Goldfish", "Bulbasaur"};
 
     // one tray icon per machine: the first instance binds this loopback port
     // and owns the tray; later instances quit via the pet's right-click menu
@@ -1037,6 +1043,15 @@ public class CatApp extends ApplicationAdapter {
             SoundFx.blub();
             return;
         }
+        if (attackType == 6) {
+            // Bulbasaur: Vine Whip - a vine cracks out of each side of the bulb
+            wake();
+            vineLeft = VINE_DUR;
+            vineCracked = false;
+            squash.kick(3f);
+            SoundFx.vineWhip();
+            return;
+        }
         wake();
         squash.kick(5f);          // excited hop
         if (attackType == 1) {
@@ -1167,6 +1182,7 @@ public class CatApp extends ApplicationAdapter {
         alertLeft -= dt;
         boltLeft -= dt;
         scratchLeft -= dt;
+        vineLeft -= dt;
         float hissBefore = hissLeft;
         hissLeft -= dt;
         if (hissBefore > SCRATCH_DUR && hissLeft <= SCRATCH_DUR && hissLeft > 0f) {
@@ -1425,7 +1441,7 @@ public class CatApp extends ApplicationAdapter {
             squash.kick(3f);                      // flops back upright
         }
 
-        boolean busy = boltLeft > 0f || waterLeft > 0f || scratchLeft > 0f
+        boolean busy = boltLeft > 0f || waterLeft > 0f || scratchLeft > 0f || vineLeft > 0f
                 || hissLeft > 0f || digLeft > 0f || puffLeft > 0f
                 || stretchLeft > 0f || waterRemindLeft > 0f || koT > 0f;
         boolean calm = seated() && !sleeping && !dragging && !pressed && !hidden
@@ -1621,7 +1637,10 @@ public class CatApp extends ApplicationAdapter {
             return rollTex[((int) (time * 5f)) % rollTex.length];
         }
         if (walkTex != null && !swims && (wanderState == 2 || wanderState == 3)) {
-            float fps = wanderState == 3 ? 12f : 8f;
+            // feet planted in a stride move back ~1.7 units a frame, so match
+            // the frame rate to how fast the window travels (85 or 140 px/s)
+            float speed = (wanderState == 3 ? 140f : 85f) / Math.max(1, scale);
+            float fps = MathUtils.clamp(speed / 1.7f, 6f, 24f);
             return walkTex[((int) (time * fps)) % walkTex.length];
         }
         return null;
@@ -1902,7 +1921,9 @@ public class CatApp extends ApplicationAdapter {
 
         Texture pose = poseFrame();
         if (pose != null) {
-            float poseX = poseCenterX() - pose.getWidth() / 2f + shake;
+            // keep wide poses (sleeping, belly-up) inside the frame
+            float half = pose.getWidth() / 2f;
+            float poseX = MathUtils.clamp(poseCenterX(), half, FBO_W - half) - half + shake;
             batch.draw(pose, poseX, 0, pose.getWidth(), pose.getHeight());
             if (pose == shellTex && shellLeft <= 0.7f) {
                 drawShellEyes(poseX);   // peeking out before popping back
@@ -2045,6 +2066,50 @@ public class CatApp extends ApplicationAdapter {
         }
     }
 
+    /**
+     * Vine Whip: a vine grows straight up out of each side of the bulb into
+     * the open space above the pet, leaning outward and rippling, cracks at
+     * the top (a burst of leaves off each tip) and sinks back. Drawn in
+     * window space after the pet, following its bob, squash and facing.
+     */
+    private void drawVines(float bob, float sx, float sy) {
+        float prog = 1f - vineLeft / VINE_DUR;
+        float ext = MathUtils.sin(MathUtils.clamp(prog, 0f, 1f) * MathUtils.PI);
+        int len = Math.round(ext * 14f);
+        Color vine = Color.valueOf("5DB54A"), dark = Color.valueOf("1F3B33");
+        float[][] tips = new float[2][2];
+        for (int pass = 0; pass < 2; pass++) {
+            batch.setColor(pass == 0 ? dark : vine);
+            for (int side = 0; side < 2; side++) {
+                int dir = side == 0 ? -1 : 1;
+                float baseX = eyeCenterX - 0.5f + dir * 7.5f;    // the bulb's flanks
+                for (int i = 0; i <= len; i++) {
+                    float t = i / 14f;
+                    float fx = baseX + dir * (0.35f * i + MathUtils.sin(i * 0.8f - time * 22f) * t);
+                    float fy = 23f + i;
+                    float x = CAT_X + FBO_W / 2f + (fx - FBO_W / 2f) * sx;
+                    float y = bob + fy * sy;
+                    if (pass == 0) {
+                        batch.draw(px, x - 1f, y - 1f, 3, 3);   // outline
+                    } else {
+                        batch.draw(px, x - 0.5f, y - 0.5f, 2, 2);
+                    }
+                    if (i == len) {
+                        tips[side][0] = x;
+                        tips[side][1] = y;
+                    }
+                }
+            }
+        }
+        batch.setColor(Color.WHITE);
+        if (!vineCracked && prog >= 0.5f) {
+            vineCracked = true;                                 // crack! leaves fly off both tips
+            for (float[] tip : tips) {
+                sparkBurst(tip[0], tip[1], 4, leafTex, 12f, 0f, 2f);
+            }
+        }
+    }
+
     private void drawOpenEye(float eyeX, int pgx, int irisY) {
         float gazeDown = kneadNow || digLeft > 0f ? -1f : gazeY;   // watch the paws
         if (eyeStyle == 1) {
@@ -2137,7 +2202,8 @@ public class CatApp extends ApplicationAdapter {
             } else {
                 float rate = wanderState == 3 ? 12f : 9f;   // hurried gait going home
                 // real walk frames move their legs, so drop the sticker waddle
-                bob = Math.abs(MathUtils.sin(time * rate)) * (walkTex != null ? 0.4f : 0.8f);
+                // walk frames bake their own bob; others get the sticker bounce
+                bob = walkTex != null ? 0f : Math.abs(MathUtils.sin(time * rate)) * 0.8f;
                 waddle = walkTex != null ? 0f : MathUtils.sin(time * rate) * 3f;
             }
             if (facingLeft) {
@@ -2187,6 +2253,9 @@ public class CatApp extends ApplicationAdapter {
         batch.draw(fboRegion, CAT_X, bob, FBO_W / 2f, 0,
                 FBO_W, FBO_H, scaleX * puff, drawScaleY * puff, waddle);
         batch.setColor(Color.WHITE);
+        if (vineLeft > 0f) {
+            drawVines(bob, scaleX * puff, drawScaleY * puff);
+        }
 
         if (boltLeft > 0f && MathUtils.sin(time * 55f) > -0.4f) {
             float a = MathUtils.clamp(boltLeft / 0.3f, 0f, 1f);
@@ -2272,6 +2341,7 @@ public class CatApp extends ApplicationAdapter {
         zzzTex.dispose();
         alertTex.dispose();
         sparkTex.dispose();
+        leafTex.dispose();
         waterDropTex.dispose();
         noteTex.dispose();
         dirtTex.dispose();

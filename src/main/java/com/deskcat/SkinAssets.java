@@ -59,6 +59,9 @@ public class SkinAssets {
     private static final Color C_AMBER = Color.valueOf("F2C14E");
     private static final Color C_SHIBA = Color.valueOf("D9A066");
     private static final Color C_GOLDFISH = Color.valueOf("FF8C3A");
+    private static final Color C_BULBA = Color.valueOf("79CBB0");
+    private static final Color C_BULBA_IRIS = Color.valueOf("C8323E");
+    private static final Color C_BULBA_LINE = Color.valueOf("1F3B33");
 
     private static final Map<String, SkinAssets> CACHE = new HashMap<String, SkinAssets>();
 
@@ -80,7 +83,7 @@ public class SkinAssets {
             a.attackType = 2;
             a.bodyTex = PixelArt.tex(SquirtArt.sitBody());
             a.tailTex = frames(3, SquirtArt::sitTail);
-            a.walkTex = frames(4, SquirtArt::walk);
+            a.walkTex = frames(8, SquirtArt::walk);
             a.sleepTex = frames(2, SquirtArt::sleep);
             a.rollTex = frames(2, SquirtArt::roll);
             a.shellTex = PixelArt.tex(SquirtArt.shell(false, 0));
@@ -103,7 +106,7 @@ public class SkinAssets {
             a.attackType = 1;
             a.bodyTex = PixelArt.tex(PikaArt.sitBody());
             a.tailTex = frames(3, PikaArt::sitTail);
-            a.walkTex = frames(4, PikaArt::walk);
+            a.walkTex = frames(8, PikaArt::walk);
             a.sleepTex = frames(2, PikaArt::sleep);
             a.rollTex = frames(2, PikaArt::roll);
             a.tailX = 23;
@@ -131,7 +134,7 @@ public class SkinAssets {
             a.attackType = 4;
             a.bodyTex = PixelArt.tex(DogArt.sitBody());
             a.tailTex = frames(3, DogArt::sitTail);
-            a.walkTex = frames(4, DogArt::walk);
+            a.walkTex = frames(8, DogArt::walk);
             a.sleepTex = frames(2, DogArt::sleep);
             a.rollTex = frames(2, DogArt::roll);
             a.tailX = 26;
@@ -145,6 +148,26 @@ public class SkinAssets {
             a.furColor = C_SHIBA;
             a.irisColor = C_IRIS_BROWN;
             a.pawTex = PixelArt.tex(PathArt.paw(DogArt.SHIBA, PathArt.CREAM));
+        } else if ("bulbasaur".equals(skin)) {
+            a.eyeStyle = 5;      // baked sockets, moving pupils
+            a.attackType = 6;    // Vine Whip
+            a.bodyTex = PixelArt.tex(BulbArt.sitBody());
+            a.tailTex = frames(3, BulbArt::sitTail);    // the bulb, behind the head
+            a.walkTex = frames(8, BulbArt::walk);
+            a.sleepTex = frames(2, BulbArt::sleep);
+            a.rollTex = frames(2, BulbArt::happy);      // can't roll onto its bulb: beams instead
+            a.tailX = 5;
+            a.eyeLX = 7;
+            a.eyeRX = 23;
+            a.eyeW = 4;
+            a.eyeH = 4;
+            a.eyeY = 12;
+            a.eyeCenterX = 17f;
+            a.eyeCenterY = 14f;
+            a.furColor = C_BULBA;
+            a.irisColor = C_BULBA_IRIS;
+            a.lineColor = C_BULBA_LINE;
+            a.pawTex = PixelArt.tex(PathArt.paw(BulbArt.BULBA, PathArt.FUR));
         } else if ("goldfish".equals(skin)) {
             a.eyeStyle = 1;
             a.attackType = 5;
@@ -180,7 +203,7 @@ public class SkinAssets {
         a.eyeStyle = 5;
         a.bodyTex = PixelArt.tex(CatArt.sitBody(p));
         a.tailTex = frames(3, f -> CatArt.sitTail(p, f));
-        a.walkTex = frames(4, f -> CatArt.walk(p, f));
+        a.walkTex = frames(8, f -> CatArt.walk(p, f));
         a.sleepTex = frames(2, f -> CatArt.sleep(p, f));
         a.rollTex = frames(2, f -> CatArt.roll(p, f));
         a.pawTex = PixelArt.tex(CatArt.paw(p));

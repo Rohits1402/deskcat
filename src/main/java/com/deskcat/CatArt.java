@@ -1,5 +1,6 @@
 package com.deskcat;
 
+import static com.deskcat.Gait.*;
 import static com.deskcat.PathArt.*;
 
 /**
@@ -113,140 +114,168 @@ final class CatArt {
 
     // =============================================================== WALK
 
-    static final String W_FAR_EAR = "M22 2H23V3H24V5H22Z";
-    static final String W_HEAD = "M22 4H28V5H29V6H30V11H29V12H28V13H22V12H21V11H20V6H21V5H22Z";
-    static final String W_NEAR_EAR = "M26 1H27V5H23V4H24V3H25V2H26Z";
-    static final String W_BODY = "M9 10H21V11H23V12H24V17H23V18H21V19H9V18H7V17H6V12H7V11H9Z";
-    static final String W_CHEST = "M19 13H23V14H24V17H23V18H19V17H18V14H19Z";
-    static final String W_MUZZLE = "M26 9H29V10H30V12H29V13H26V12H25V10H26Z";
-    static final String W_EYE_RING = "M23 5H26V6H27V9H26V10H23V9H22V6H23Z";
-    static final String W_TAIL = "M4 3H7V4H6V5H5V9H6V11H7V12H8V13H5V12H4V11H3V9H2V5H3V4H4Z";
+    /*
+     * Side view on the sitting design's proportions: the head is as tall as
+     * the sitting head (~14 rows) with the same triangle ears, big socketed
+     * eye, cream muzzle and stripes; a round chunky body with a cream bib;
+     * short thick legs; a thick tail. 36x30, ground row 28.
+     */
+    static final String C_HEAD = "M23 4H30V5H32V6H33V7H34V14H33V16H32V17H30V18H23V17H21V16H20V15H19V7H20V6H21V5H23Z";
+    static final String C_MUZZLE = "M30 11H34V12H35V14H34V15H30V14H29V12H30Z";
+    static final String C_EAR = "M27 1H28V2H29V3H30V4H31V5H24V4H25V3H26V2H27Z";
+    static final String C_EAR_IN = "M27 2H28V3H29V4H26V3H27Z";
+    static final String C_FAR_EAR = "M21 2H22V3H23V4H24V5H20V4H21Z";
+    static final String C_RING = "M27 7H30V8H31V12H30V13H27V12H26V8H27Z";
+    static final String C_IRIS = "M28 8H30V12H28V11H27V9H28Z";
+    static final String C_BODY = "M10 12H21V13H24V14H26V15H27V17H28V21H27V22H26V23H24V24H9V23H7V22H6V21H5V16H6V15H7V14H8V13H10Z";
+    static final String C_CHEST = "M23 14H27V15H28V20H27V21H23V20H22V15H23Z";
+    static final String C_TAIL = "M2 4H5V6H4V9H5V10H6V11H8V12H9V13H10V14H5V13H4V12H3V11H2V10H1V5H2Z";
 
-    /** Side-view walk, facing right; 4 frames of a trot, 32x24. */
-    static PoseArt.Grid walk(Palette p, int frame) {
-        Canvas c = new Canvas(32, 24);
-        // diagonal pairs swing together: A = near-front + far-back
-        int[] adx = {1, 0, -1, 0}, alift = {0, 0, 0, 1};
-        int[] bdx = {-1, 0, 1, 0}, blift = {0, 1, 0, 0};
-        fill(c, W_TAIL, FUR);
-        mark(c, 2, 6, 3, 1);
-        mark(c, 3, 10, 3, 1);
-        shiftRows(c, 0, 7, new int[] {0, 1, 0, -1}[frame]);
-        leg(c, 21 + bdx[frame], blift[frame], false);   // far front
-        leg(c, 10 + adx[frame], alift[frame], false);   // far back
-        fill(c, W_FAR_EAR, FUR_FAR);
-        fill(c, W_BODY, FUR);
-        fill(c, W_HEAD, FUR);
-        fill(c, W_NEAR_EAR, FUR);
-        px(c, 26, 2, INNER_EAR);
-        px(c, 25, 3, INNER_EAR);
-        px(c, 26, 3, INNER_EAR);
-        mark(c, 10, 10, 1, 3);
-        mark(c, 13, 10, 1, 3);
-        mark(c, 16, 10, 1, 3);
-        mark(c, 21, 5, 1, 2);
-        fill(c, W_CHEST, CREAM);
-        fill(c, W_MUZZLE, CREAM);
-        leg(c, 19 + adx[frame], alift[frame], true);    // near front
-        leg(c, 8 + bdx[frame], blift[frame], true);     // near back
-        fill(c, W_EYE_RING, RING);
-        rect(c, 23, 6, 3, 3, IRIS);
-        rect(c, 24, 7, 2, 2, PUPIL);
-        px(c, 24, 7, GLINT);
-        px(c, 29, 10, NOSE);
-        px(c, 28, 12, MOUTH);
-        return render(c, p, new int[][] {{31, 11}, {31, 13}});
-    }
-
-    /** A leg hanging from the body; lift raises the paw one row. */
-    private static void leg(Canvas c, int x, int lift, boolean near) {
-        int w = near ? 3 : 2;
-        rect(c, x, 17, w, 5 - lift, near ? FUR : FUR_FAR);
-        rect(c, x, 22 - lift, w, 1, near ? CREAM : CREAM_FAR);
+    /** Walking, facing right; 8 frames of a lateral-sequence walk, 36x30. */
+    static PoseArt.Grid walk(Palette p, int f) {
+        Canvas c = new Canvas(36, 30);
+        int b = BOB[f], hb = headBob(f);
+        int gy = 28;
+        fill(c, C_TAIL, FUR, 0, b, false);
+        mark(c, 1, 7 + b, 3, 1);
+        mark(c, 1, 10 + b, 3, 1);
+        shiftRows(c, 0, 8 + b, SWAY[f]);
+        // legs first, so they come out from under the body
+        draw(c, hind(c, 14, 20 + b, gy, (f + 4) % 8), false, CREAM_FAR);   // far hind
+        draw(c, front(c, 25, 20 + b, gy, (f + 2) % 8), false, CREAM_FAR);  // far fore
+        draw(c, hind(c, 10, 20 + b, gy, f), true, CREAM);                  // near hind
+        draw(c, front(c, 21, 20 + b, gy, (f + 6) % 8), true, CREAM);       // near fore
+        fill(c, C_FAR_EAR, FUR_FAR, 0, hb, false);
+        fill(c, C_BODY, FUR, 0, b, false);
+        mark(c, 11, 12 + b, 1, 3);
+        mark(c, 14, 12 + b, 1, 3);
+        mark(c, 17, 12 + b, 1, 3);
+        fill(c, C_CHEST, CREAM, 0, b, false);
+        fillOver(c, C_HEAD, FUR, 0, hb, false);
+        fill(c, C_EAR, FUR, 0, hb, false);
+        fill(c, C_EAR_IN, INNER_EAR, 0, hb, false);
+        mark(c, 25, 4 + hb, 1, 2);                   // forehead stripes
+        mark(c, 23, 5 + hb, 1, 2);
+        mark(c, 20, 11 + hb, 2, 1);                  // cheek stripes
+        mark(c, 20, 13 + hb, 2, 1);
+        fill(c, C_MUZZLE, CREAM, 0, hb, false);
+        fill(c, C_RING, RING, 0, hb, false);
+        fill(c, C_IRIS, IRIS, 0, hb, false);
+        rect(c, 28, 9 + hb, 2, 2, PUPIL);
+        px(c, 28, 9 + hb, GLINT);
+        px(c, 33, 11 + hb, NOSE);
+        px(c, 34, 12 + hb, NOSE);
+        px(c, 33, 14 + hb, MOUTH);
+        return render(c, p, new int[][] {{35, 12 + hb}, {35, 14 + hb}});
     }
 
     // ============================================================== SLEEP
 
-    static final String L_BODY = "M13 4H21V5H24V6H25V7H26V9H27V14H26V15H25V16H24V17H8V16H7V15H6V8H7V7H8V6H10V5H13Z";
-    static final String L_BODY_IN = "M13 3H21V4H24V5H25V6H26V8H27V14H26V15H25V16H24V17H8V16H7V15H6V7H7V6H8V5H10V4H13Z";
-    static final String L_TAIL = "M13 14H24V15H25V17H12V15H13Z";
-    static final String L_HEAD = "M3 7H10V8H11V9H12V15H11V16H10V17H3V16H2V15H1V9H2V8H3Z";
-    static final String L_EAR_L = "M3 4H4V5H5V6H6V7H3Z";
-    static final String L_EAR_R = "M9 4H10V7H7V6H8V5H9Z";
+    /**
+     * The sitting head (ears, stripes, muzzle, nose) on a 28x19 canvas in
+     * sitting coordinates, eyes closed: happy arcs (^) or sleepy curves.
+     */
+    private static Canvas closedHead(boolean happy) {
+        Canvas h = new Canvas(28, 19);
+        fillPair(h, SIT_EAR, FUR);
+        fill(h, SIT_HEAD, FUR);
+        fillPair(h, SIT_EAR_IN, INNER_EAR);
+        mark(h, 11, 6, 1, 2);
+        mark(h, 13, 5, 2, 2);
+        mark(h, 16, 6, 1, 2);
+        markPair(h, 3, 11, 2, 1);
+        markPair(h, 3, 13, 2, 1);
+        fill(h, SIT_MUZZLE, CREAM);
+        rect(h, 13, 13, 2, 1, NOSE);
+        px(h, 12, 14, MOUTH);
+        px(h, 13, 15, MOUTH);
+        px(h, 14, 15, MOUTH);
+        px(h, 15, 14, MOUTH);
+        for (int ex : new int[] {5, 17}) {
+            if (happy) {                        // ^ ^
+                rect(h, ex + 1, 10, 4, 1, LINE);
+                px(h, ex, 11, LINE);
+                px(h, ex + 5, 11, LINE);
+            } else {                            // contented, closed
+                rect(h, ex + 1, 11, 4, 1, LINE);
+                px(h, ex, 10, LINE);
+                px(h, ex + 5, 10, LINE);
+            }
+        }
+        return h;
+    }
 
-    /** Curled up asleep, tail wrapped round the front; 2 breaths, 30x18. */
+    static final String LOAF = "M21 5H31V6H33V7H35V8H36V18H35V19H34V20H18V19H17V18H16V8H17V7H18V6H21Z";
+    static final String LOAF_IN = "M21 4H31V5H33V6H35V7H36V18H35V19H34V20H18V19H17V18H16V7H17V6H18V5H21Z";
+    static final String LOAF_TAIL = "M30 16H35V17H36V19H35V20H21V19H20V18H21V17H30Z";
+
+    /** Curled up: the sitting head resting on its paws, loaf and tail behind; 2 breaths, 36x21. */
     static PoseArt.Grid sleep(Palette p, int frame) {
-        Canvas c = new Canvas(30, 18);
-        fill(c, frame == 0 ? L_BODY : L_BODY_IN, FUR);
-        int top = frame == 0 ? 4 : 3;
-        mark(c, 14, top, 1, 3);
-        mark(c, 17, top, 1, 3);
-        mark(c, 20, top + 1, 1, 3);
-        mark(c, 23, top + 2, 1, 2);
-        fillOver(c, L_TAIL, FUR);
-        mark(c, 16, 15, 1, 2);
-        mark(c, 20, 15, 1, 2);
-        fillOver(c, L_HEAD, FUR);
-        fill(c, L_EAR_L, FUR);
-        fill(c, L_EAR_R, FUR);
-        for (int[] q : new int[][] {{3, 5}, {3, 6}, {4, 6}, {9, 5}, {9, 6}, {8, 6}}) {
-            px(c, q[0], q[1], INNER_EAR);
-        }
-        mark(c, 5, 8, 1, 1);                 // a little forehead stripe
-        mark(c, 7, 8, 1, 1);
-        rect(c, 3, 13, 6, 2, CREAM);         // muzzle
-        rect(c, 4, 15, 4, 1, CREAM);
-        rect(c, 5, 13, 2, 1, NOSE);
-        for (int ex : new int[] {2, 7}) {    // closed, contented eyes
-            px(c, ex, 11, LINE);
-            px(c, ex + 1, 12, LINE);
-            px(c, ex + 2, 11, LINE);
-        }
-        return render(c, p, null);
+        Canvas c = new Canvas(36, 21);
+        fill(c, frame == 0 ? LOAF : LOAF_IN, FUR);
+        int top = frame == 0 ? 5 : 4;
+        mark(c, 24, top, 1, 3);
+        mark(c, 27, top, 1, 3);
+        mark(c, 30, top + 1, 1, 3);
+        mark(c, 33, top + 3, 1, 3);
+        fillOver(c, LOAF_TAIL, FUR);
+        mark(c, 25, 17, 1, 3);
+        mark(c, 29, 17, 1, 3);
+        mark(c, 33, 16, 1, 3);
+        Canvas front = new Canvas(36, 21);
+        paste(front, closedHead(false), 0, -1, false);
+        creasePaste(c, front);
+        rect(c, 7, 17, 4, 2, CREAM);                 // front paws under the chin
+        rect(c, 15, 17, 4, 2, CREAM);
+        px(c, 9, 18, SEP);
+        px(c, 17, 18, SEP);
+        return render(c, p, new int[][] {{0, 12}, {1, 12}, {0, 14}, {1, 14}});
     }
 
     // =============================================================== ROLL
 
-    static final String R_HEAD = "M3 7H9V8H10V9H11V15H10V16H9V17H3V16H2V15H1V9H2V8H3Z";
-    static final String R_EAR_L = "M2 16H6V17H5V18H4V19H2Z";
-    static final String R_EAR_R = "M7 16H11V19H9V18H8V17H7Z";
-    static final String R_BODY = "M13 8H25V9H27V10H28V14H27V15H25V16H13V15H11V14H10V10H11V9H13Z";
-    static final String R_BELLY = "M15 9H23V10H24V12H23V13H15V12H14V10H15Z";
+    /** The whole sitting cat (tail, body, face) as zones, delighted. 34x30. */
+    private static Canvas delighted() {
+        Canvas c = new Canvas(34, 30);
+        Canvas t = new Canvas(12, 23);
+        fill(t, SIT_TAIL, FUR, 1, 0, false);
+        mark(t, 6, 11, 4, 1);
+        mark(t, 6, 14, 4, 1);
+        mark(t, 4, 8, 3, 1);
+        paste(c, t, 21, 7, false);
+        Canvas b = new Canvas(28, 30);
+        fill(b, SIT_BODY, FUR);
+        paste(b, closedHead(true), 0, 0, false);
+        markPair(b, 5, 20, 2, 1);
+        markPair(b, 4, 23, 2, 1);
+        fill(b, SIT_BIB, CREAM);
+        fillPair(b, SIT_PAW, CREAM);
+        fillPair(b, SIT_HIND, CREAM);
+        px(b, 10, 28, SEP);
+        px(b, 17, 28, SEP);
+        // mouth open with delight, over the sitting ":3"
+        rect(b, 12, 14, 4, 3, CREAM);
+        px(b, 12, 14, MOUTH);
+        rect(b, 13, 15, 2, 1, INNER_EAR);
+        px(b, 15, 14, MOUTH);
+        rect(b, 13, 16, 2, 1, MOUTH);
+        paste(c, b, 0, 0, false);
+        return c;
+    }
 
-    /** Belly-up with paws in the air, delighted; 2 wiggle frames, 32x20. */
+    /**
+     * Rolled onto its back: the sitting cat turned upside down, paws in the
+     * air with pink toe beans, paddling; 2 frames, 34x30.
+     */
     static PoseArt.Grid roll(Palette p, int frame) {
-        Canvas c = new Canvas(32, 20);
-        // front paws folded on the chest, hind legs up in the air;
-        // alternate ones paddle up and down
-        int[][] legs = {{13, 7, 0}, {16, 7, 1}, {21, 5, 1}, {24, 5, 0}};
-        for (int[] l : legs) {
-            int y = l[1] - ((l[2] + frame) % 2);
-            boolean near = l[0] == 13 || l[0] == 24;
-            rect(c, l[0], y, 2, 9 - y, near ? FUR : FUR_FAR);
-            rect(c, l[0], y, 2, 1, near ? CREAM : CREAM_FAR);
+        Canvas c = new Canvas(34, 30);
+        paste(c, delighted(), 0, 0, true);
+        for (int x : new int[] {9, 18}) {
+            rect(c, x, 2, 2, 1, INNER_EAR);
         }
-        rect(c, 27, 13, 3, 1, FUR);          // tail along the ground, tip up
-        rect(c, 29, 10, 2, 3, FUR);
-        rect(c, 30, 9, 1, 1, FUR);
-        fill(c, R_BODY, FUR);
-        fill(c, R_BELLY, CREAM);
-        mark(c, 11, 12, 2, 1);
-        mark(c, 25, 11, 2, 1);
-        mark(c, 12, 14, 2, 1);
-        mark(c, 24, 13, 2, 1);
-        fill(c, R_EAR_L, FUR);
-        fill(c, R_EAR_R, FUR);
-        fillOver(c, R_HEAD, FUR);
-        px(c, 3, 17, INNER_EAR);
-        px(c, 9, 17, INNER_EAR);
-        rect(c, 4, 8, 4, 2, CREAM);          // chin up, upside down
-        rect(c, 5, 10, 2, 1, NOSE);
-        mark(c, 5, 15, 1, 1);
-        for (int ex : new int[] {2, 7}) {    // happy ^ ^ eyes, flipped over
-            px(c, ex, 12, LINE);
-            px(c, ex + 1, 13, LINE);
-            px(c, ex + 2, 12, LINE);
-        }
-        return render(c, p, null);
+        px(c, 5, 1, INNER_EAR);
+        px(c, 23, 1, INNER_EAR);
+        shiftRows(c, 0, 2, frame == 0 ? 0 : 1);
+        return render(c, p);
     }
 }

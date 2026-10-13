@@ -1,5 +1,6 @@
 package com.deskcat;
 
+import static com.deskcat.Gait.*;
 import static com.deskcat.PathArt.*;
 
 /**
@@ -86,130 +87,145 @@ final class PikaArt {
 
     // =============================================================== WALK
 
-    static final String W_EAR = "M17 1H19V2H20V4H21V5H22V6H23V7H24V8H25V9H22V8H21V7H20V6H19V5H18V3H17Z";
-    static final String W_FAR_EAR = "M25 1H26V2H27V5H28V7H24V2H25Z";
-    static final String W_HEAD = "M21 7H27V8H29V9H30V10H31V14H30V16H29V17H27V18H21V17H19V16H18V14H17V10H18V9H19V8H21Z";
-    static final String W_BODY = "M10 15H20V16H22V17H23V18H24V21H23V22H22V23H8V22H7V21H6V18H7V17H8V16H10Z";
+    /*
+     * Walking upright, with the sitting Pikachu's proportions: a head as tall
+     * as the sitting head (14 rows), big oval eye, round red cheek, long
+     * black-tipped ears swept back, short body, big feet, bolt tail. 32x30.
+     */
     static final String W_TAIL = "M0 3H6V4H7V6H6V8H7V9H8V10H7V12H8V13H9V14H10V15H11V16H12V17H8V16H7V15H6V14H5V13H4V12H3V11H2V10H4V9H3V7H2V6H1V5H0Z";
+    static final String W_HEAD = "M16 6H25V7H27V8H28V9H29V10H30V17H29V18H28V19H26V20H16V19H14V18H13V17H12V9H13V8H14V7H16Z";
+    static final String W_EAR = "M8 0H10V1H11V2H12V3H13V4H14V5H15V6H16V7H18V8H19V9H15V8H14V7H12V6H11V5H10V4H9V2H8Z";
+    static final String W_FAR_EAR = "M20 0H22V2H23V7H19V1H20Z";
+    static final String W_EYE = "M24 9H25V10H26V13H25V14H24V13H23V10H24Z";
+    static final String W_BODY = "M14 17H23V18H24V19H25V24H24V25H23V26H13V25H12V24H11V20H12V19H13V18H14Z";
 
-    /** On all fours facing right, ears swept back; 4 frames of a scamper, 32x28. */
-    static PoseArt.Grid walk(int frame) {
-        Canvas c = new Canvas(32, 28);
-        int[] adx = {1, 0, -1, 0}, alift = {0, 0, 0, 1};
-        int[] bdx = {-1, 0, 1, 0}, blift = {0, 1, 0, 0};
-        fill(c, W_TAIL, FUR);
-        paint(c, 0, 14, 14, 3, FUR, ACC2);
-        paint(c, 4, 3, 3, 3, FUR, FUR_FAR);
-        shiftRows(c, 0, 9, new int[] {0, 1, 0, -1}[frame]);
-        leg(c, 21 + bdx[frame], blift[frame], false);
-        leg(c, 10 + adx[frame], alift[frame], false);
-        fill(c, W_FAR_EAR, FUR_FAR);
-        paint(c, 0, 1, 32, 3, FUR_FAR, ACC1_FAR);
-        fill(c, W_BODY, FUR);
-        mark(c, 12, 15, 2, 2);                       // brown back stripes
-        mark(c, 16, 15, 2, 2);
-        paint(c, 0, 21, 32, 2, FUR, FUR_FAR);        // shaded underside
-        fill(c, W_EAR, FUR);
-        paint(c, 17, 1, 5, 3, FUR, ACC1);
-        fillOver(c, W_HEAD, FUR);
-        paint(c, 21, 8, 4, 1, FUR, ACC4);
-        paint(c, 19, 16, 10, 2, FUR, FUR_FAR);       // under the jaw
-        leg(c, 19 + adx[frame], alift[frame], true);
-        leg(c, 8 + bdx[frame], blift[frame], true);
-        rect(c, 26, 10, 2, 3, PUPIL);
-        px(c, 26, 10, GLINT);
-        rect(c, 23, 13, 3, 2, ACC3);                 // cheek, below and behind the eye
-        px(c, 30, 11, NOSE);
-        px(c, 29, 13, MOUTH);
-        px(c, 28, 14, MOUTH);
+    /** Walking upright facing right: ears lag a beat, arm swings, tail sways; 8 frames, 32x30. */
+    static PoseArt.Grid walk(int f) {
+        Canvas c = new Canvas(32, 30);
+        int b = BOB[f], hb = headBob(f), eb = BOB[(f + 6) % 8];
+        int gy = 28;
+        fill(c, W_TAIL, FUR, 0, 6 + b, false);
+        paint(c, 0, 20 + b, 13, 3, FUR, ACC2);
+        paint(c, 4, 9 + b, 3, 3, FUR, FUR_FAR);
+        shiftRows(c, 0, 13 + b, SWAY[f]);
+        draw(c, footLeg(c, 15, 24 + b, gy, (f + 4) % 8, 3, 5), false, FUR_FAR);
+        draw(c, footLeg(c, 19, 24 + b, gy, f, 3, 5), true, FUR);
+        fill(c, W_BODY, FUR, 0, b, false);
+        paint(c, 11, 20 + b, 3, 1, FUR, PATTERN);       // brown back stripes
+        paint(c, 11, 23 + b, 2, 1, FUR, PATTERN);
+        paint(c, 19, 23 + b, 6, 3, FUR, FUR_FAR);       // belly in shade
+        fill(c, W_FAR_EAR, FUR_FAR, 0, 1 + eb, false);
+        paint(c, 18, 0, 6, 4 + eb, FUR_FAR, ACC1_FAR);
+        fill(c, W_EAR, FUR, 0, 1 + eb, false);
+        paint(c, 0, 0, 13, 4 + eb, FUR, ACC1);
+        fillOver(c, W_HEAD, FUR, 0, hb, false);
+        paint(c, 16, 7 + hb, 5, 1, FUR, ACC4);          // crown highlight
+        fill(c, W_EYE, PUPIL, 0, hb, false);
+        px(c, 23, 10 + hb, GLINT);                      // glint top-left, like the sitting eyes
+        px(c, 23, 11 + hb, GLINT);
+        rect(c, 18, 14 + hb, 4, 3, ACC3);               // round cheek
+        px(c, 18, 14 + hb, FUR);
+        px(c, 21, 16 + hb, FUR);
+        px(c, 29, 11 + hb, NOSE);
+        px(c, 28, 14 + hb, MOUTH);
+        px(c, 27, 15 + hb, MOUTH);
+        int ax = 20 + ARM_DX[f], ay = 20 + b;           // arm in shade, hanging forward
+        rect(c, ax, ay, 2, 2, FUR_FAR);
+        rect(c, ax + 1, ay + 2, 2, 1, FUR_FAR);
+        rect(c, ax + 1, ay + 3, 2, 1, FUR);
         return render(c, PIKA);
-    }
-
-    private static void leg(Canvas c, int x, int lift, boolean near) {
-        rect(c, x, 21, 3, 6 - lift, near ? FUR : FUR_FAR);
     }
 
     // ============================================================== SLEEP
 
-    static final String L_BODY = "M13 7H23V8H25V9H26V10H27V11H28V16H27V17H26V18H25V19H12V18H11V17H10V16H9V10H10V9H11V8H13Z";
-    static final String L_BODY_IN = "M13 6H23V7H25V8H26V9H27V10H28V16H27V17H26V18H25V19H12V18H11V17H10V16H9V9H10V8H11V7H13Z";
-    static final String L_HEAD = "M5 6H11V7H13V8H14V9H15V14H14V16H13V17H12V18H4V17H3V16H2V14H1V9H2V8H3V7H5Z";
-    static final String L_EAR = "M13 0H15V2H14V4H13V5H12V6H11V7H6V6H7V5H9V4H10V3H11V2H12V1H13Z";
-    static final String L_FAR_EAR = "M18 2H20V4H18V5H16V6H14V7H11V6H12V5H14V4H16V3H18Z";
-    static final String L_TAIL = "M26 1H31V3H30V5H29V6H28V8H27V9H24V8H25V5H27V4H26V3H25V2H26Z";
-
-    /** On its tummy, chin on its paws, ears flopped back; 2 breaths, 32x20. */
-    static PoseArt.Grid sleep(int frame) {
-        Canvas c = new Canvas(32, 20);
-        fill(c, L_TAIL, FUR);
-        paint(c, 0, 7, 32, 2, FUR, ACC2);
-        fill(c, frame == 0 ? L_BODY : L_BODY_IN, FUR);
-        int top = frame == 0 ? 7 : 6;
-        mark(c, 17, top, 2, 2);                      // back stripes
-        mark(c, 21, top + 1, 2, 2);
-        paint(c, 0, 16, 32, 3, FUR, FUR_FAR);        // shaded underside
-        fillOver(c, L_FAR_EAR, FUR_FAR);
-        paint(c, 17, 2, 4, 2, FUR_FAR, ACC1_FAR);
-        fillOver(c, L_HEAD, FUR);
-        fillOver(c, L_EAR, FUR);
-        paint(c, 11, 0, 5, 3, FUR, ACC1);
-        paint(c, 4, 7, 4, 1, FUR, ACC4);             // crown highlight
-        rect(c, 3, 18, 3, 1, FUR);                   // paws under the chin
-        rect(c, 10, 18, 3, 1, FUR);
-        for (int ex : new int[] {3, 10}) {           // closed, contented eyes
-            px(c, ex, 11, LINE);
-            px(c, ex + 1, 12, LINE);
-            px(c, ex + 2, 11, LINE);
+    /** The sitting head (ears optional), eyes closed: happy ^ or asleep. 30x23. */
+    private static Canvas closedHead(boolean ears, boolean happy) {
+        Canvas h = new Canvas(30, 23);
+        if (ears) {
+            fillPair(h, SIT_EAR, FUR);
+            paint(h, 0, 0, 30, 3, FUR, ACC1);
         }
-        rect(c, 1, 13, 2, 2, ACC3);                  // cheeks
-        rect(c, 13, 13, 2, 2, ACC3);
-        rect(c, 7, 13, 2, 1, NOSE);
-        px(c, 6, 14, MOUTH);
-        px(c, 9, 14, MOUTH);
-        px(c, 7, 15, MOUTH);
-        px(c, 8, 15, MOUTH);
+        fill(h, SIT_HEAD, FUR);
+        paint(h, 25, 15, 5, 6, FUR, FUR_FAR);
+        paint(h, 23, 21, 4, 2, FUR, FUR_FAR);
+        paint(h, 10, 10, 4, 1, FUR, ACC4);
+        paint(h, 8, 11, 3, 1, FUR, ACC4);
+        fillPair(h, SIT_CHEEK, ACC3);
+        rect(h, 14, 17, 2, 1, NOSE);
+        for (int ex : new int[] {8, 18}) {
+            rect(h, ex, happy ? 14 : 16, 4, 1, LINE);
+            px(h, ex - 1, 15, LINE);
+            px(h, ex + 4, 15, LINE);
+        }
+        if (happy) {                                    // open, delighted
+            rect(h, 12, 18, 6, 1, MOUTH);
+            rect(h, 13, 19, 4, 1, INNER_EAR);
+            rect(h, 13, 20, 4, 1, MOUTH);
+        } else {
+            px(h, 13, 18, MOUTH);
+            px(h, 14, 19, MOUTH);
+            px(h, 15, 19, MOUTH);
+            px(h, 16, 18, MOUTH);
+        }
+        return h;
+    }
+
+    static final String LOAF = "M24 11H34V12H36V13H37V14H38V23H37V24H36V25H21V24H20V23H19V14H20V13H21V12H24Z";
+    static final String LOAF_IN = "M24 10H34V11H36V12H37V13H38V23H37V24H36V25H21V24H20V23H19V13H20V12H21V11H24Z";
+    static final String LOAF_TAIL = "M32 2H37V3H38V4H37V5H36V6H35V7H34V8H35V9H34V10H33V11H30V10H31V9H32V8H31V6H33V5H32V4H31V3H32Z";
+
+    /** Asleep: the sitting head on its paws, body behind, bolt tail up; 2 breaths, 39x27. */
+    static PoseArt.Grid sleep(int frame) {
+        Canvas c = new Canvas(39, 27);              // a row of headroom for the ear tips
+        fill(c, LOAF_TAIL, FUR, 0, frame == 0 ? 1 : 0, false);
+        paint(c, 0, 9, 39, 3, FUR, ACC2);
+        fill(c, frame == 0 ? LOAF : LOAF_IN, FUR, 0, 1, false);
+        int top = frame == 0 ? 12 : 11;
+        mark(c, 28, top, 2, 2);                      // back stripes
+        mark(c, 32, top + 1, 2, 2);
+        paint(c, 19, 22, 20, 4, FUR, FUR_FAR);       // shaded underside
+        Canvas front = new Canvas(39, 27);
+        paste(front, closedHead(true, false), 0, 1, false);
+        creasePaste(c, front);
+        rect(c, 8, 24, 4, 2, FUR_FAR);               // paws under the chin
+        rect(c, 18, 24, 4, 2, FUR_FAR);
         return render(c, PIKA);
     }
 
     // =============================================================== ROLL
 
-    static final String R_BODY = "M16 12H26V13H28V14H29V18H28V19H26V20H16V19H14V18H13V14H14V13H16Z";
-    static final String R_HEAD = "M7 8H12V9H14V10H15V11H16V16H15V17H14V18H12V19H7V18H5V17H4V16H3V11H4V10H5V9H7Z";
-    static final String R_EAR = "M3 15H6V17H5V18H4V19H3V20H1V17H2V16H3Z";
-    static final String R_FAR_EAR = "M1 11H4V12H5V14H2V13H1Z";
-    static final String R_TAIL = "M29 4H34V6H33V7H32V9H31V11H30V13H29V15H26V11H27V9H28V5H29Z";
+    static final String R_EAR = "M7 18H10V20H9V21H8V22H7V23H6V24H2V23H3V22H4V21H5V20H6V19H7Z";
 
     /**
-     * On its back, head in profile facing the sky (an upside-down face read
-     * as a frown and the hanging ears as boots), ears along the ground,
-     * paws paddling; 2 frames, 35x22.
+     * Rolled onto its back: the sitting Pikachu upside down, feet paddling,
+     * long ears splayed along the ground (straight down they read as
+     * standing on its ears); 2 frames, 36x25.
      */
     static PoseArt.Grid roll(int frame) {
-        Canvas c = new Canvas(35, 22);
-        fill(c, R_FAR_EAR, FUR_FAR);
-        paint(c, 0, 11, 3, 3, FUR_FAR, ACC1_FAR);
-        int[][] legs = {{15, 9, 0, 2}, {18, 9, 1, 2}, {22, 7, 1, 3}, {25, 7, 0, 3}};
-        for (int[] l : legs) {
-            int y = l[1] - ((l[2] + frame) % 2);
-            boolean near = l[0] == 15 || l[0] == 25;
-            rect(c, l[0], y, l[3], 13 - y, near ? FUR : FUR_FAR);
-        }
-        fill(c, R_TAIL, FUR);
-        paint(c, 0, 12, 35, 3, FUR, ACC2);
-        fill(c, R_BODY, FUR);
-        paint(c, 0, 18, 35, 2, FUR, FUR_FAR);        // its back, on the ground
-        fill(c, R_EAR, FUR);
-        paint(c, 0, 18, 6, 2, FUR, ACC1);
-        fillOver(c, R_HEAD, FUR);
-        paint(c, 7, 9, 3, 1, FUR, ACC4);             // highlight
-        px(c, 10, 8, NOSE);                          // snout to the sky
-        rect(c, 11, 9, 2, 1, MOUTH);                 // open, delighted
-        px(c, 13, 10, MOUTH);
-        px(c, 12, 10, INNER_EAR);
-        px(c, 5, 12, LINE);                          // happy closed eye
-        rect(c, 6, 11, 2, 1, LINE);
-        px(c, 8, 12, LINE);
-        rect(c, 9, 13, 3, 2, ACC3);                  // cheek
+        Canvas s = new Canvas(36, 30);
+        Canvas t = new Canvas(15, 24);
+        fill(t, SIT_TAIL, FUR, 0, 1, false);
+        paint(t, 0, 19, 15, 5, FUR, ACC2);
+        paint(t, 9, 4, 6, 4, FUR, FUR_FAR);
+        paste(s, t, 21, 6, false);
+        Canvas b = new Canvas(30, 30);
+        fill(b, SIT_BODY, FUR);
+        paint(b, 0, 23, 30, 1, FUR, FUR_FAR);
+        paint(b, 22, 23, 8, 7, FUR, FUR_FAR);
+        paste(b, closedHead(false, true), 0, 0, false);
+        fillOverPair(b, SIT_FOOT, FUR);
+        fillPair(b, SIT_ARM, FUR_FAR);
+        rect(b, 11, 26, 2, 1, FUR);
+        rect(b, 17, 26, 2, 1, FUR);
+        paste(s, b, 0, 0, false);
+        Canvas c = new Canvas(36, 25);
+        fill(c, R_EAR, FUR, 0, 0, false);            // ears, behind the head
+        fill(c, R_EAR, FUR, 7, 0, true);             // mirrored about the head's centre
+        paint(c, 0, 22, 36, 2, FUR, ACC1);
+        Canvas f = new Canvas(36, 30);
+        paste(f, s, 0, 0, true);
+        paste(c, f, 0, 1, false);
+        shiftRows(c, 1, 3, frame == 0 ? 0 : 1);
         return render(c, PIKA);
     }
 }

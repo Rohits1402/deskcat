@@ -534,10 +534,46 @@ Verified with the dev build: one helper under the app, `Stop-Process
 -Force` on the JVM, helper gone within 0.5 s. A normal tray Exit still
 stops it through `dispose()`.
 
+## 25. Same animal in every state; real walk cycles; Bulbasaur
+
+Two complaints drove this. First, "do you think Pikachu actually walks this
+way?" - every walk was 4 frames of rigid post legs sliding sideways, and
+Pikachu shuffled on all fours. Second, the cat and doge looked chunky
+sitting but slim walking: the side views were drawn as realistic animals
+with heads half the size of the sitting chibi. The rule now (CLAUDE.md):
+every pose must read as the same animal as the sitting drawing.
+
+- **Gait.java**: jointed limbs rasterised along polylines (front:
+  shoulder-wrist-paw; hind: hip-knee-hock-paw), 8 phases per leg, a
+  lateral-sequence walk for quadrupeds and heel-to-toe steps for bipeds;
+  bob, head lag (a frame), ear lag (two) and tail sway baked in. In stance
+  a foot moves back ~1.7 px a frame, so CatApp plays walks at
+  (85 or 140 px/s / scale) / 1.7, clamped 6-24 fps, and planted feet stay
+  put; the sticker bounce is off for skins with walk frames.
+- **Walks** redrawn on each skin's sitting proportions: cat/black cat and
+  doge chunky with the sitting head, eye and markings; Pikachu upright
+  with its full-size head; Squirtle's head enlarged to match.
+- **Sleep** = the sitting head (eyes closed) resting on its paws in front
+  of a body loaf. **Belly-up** = the sitting drawing turned upside down,
+  happy eyes, paws paddling (toe beans on the cats); Pikachu's long ears
+  splay along the ground (straight down it looked like a headstand).
+  First attempts at a side-view belly-up with the big head read as a blob.
+- **Bulbasaur** (personal-use fan art): frog-like teal head, socketed red
+  eyes (eyeStyle 5), wide open smile, spots, white claws; the bulb is the
+  tail layer so it breathes and sways behind the head. Side view on its
+  real profile (big head, squat body, onion bulb with curved leaf seams) -
+  the first walk was a cat's body with a bush on it. Petting gives a
+  delighted pose instead of a roll. Click: Vine Whip (attackType 6) - a
+  vine rises out of each side of the bulb in window space above the pet,
+  ripples, cracks with a burst of leaves and sinks back; synthesized
+  "bul-ba" + whip crack. (Horizontal vines were too cramped beside the
+  head; vertical ones are clearly visible.)
+- Poses wider than the sitting body are clamped inside the FBO.
+
 ## Current state
 
 - **Skins**: Squirtle (default), Pikachu, the original orange tabby, black
-  cat, doge and goldfish, all drawn in the path format — switchable live from
+  cat, doge, goldfish and Bulbasaur, all drawn in the path format — switchable live from
   the tray's Skin submenu, or at launch via `gradle run --args="doge"` etc.
 - **Behaviors**: eye tracking, blink, tail animation, mochi drag, petting
   hearts, keyboard kneading, startle, click attacks (water gun /

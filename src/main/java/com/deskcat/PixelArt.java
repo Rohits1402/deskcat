@@ -16,7 +16,7 @@ public final class PixelArt {
     }
 
     // K outline, W warm white, R heart red, B zzz blue, Y spark yellow,
-    // A water blue, X/Z earth brown / dark (thrown dirt)
+    // A water blue, X/Z earth brown / dark (thrown dirt), G/D leaf green / vein
     private static int rgba(char c) {
         switch (c) {
             case 'K': return Color.rgba8888(Color.valueOf("26202A"));
@@ -27,6 +27,8 @@ public final class PixelArt {
             case 'A': return Color.rgba8888(Color.valueOf("8CCFE8"));
             case 'X': return Color.rgba8888(Color.valueOf("B57A42"));
             case 'Z': return Color.rgba8888(Color.valueOf("2E2622"));
+            case 'G': return Color.rgba8888(Color.valueOf("7FD25E"));
+            case 'D': return Color.rgba8888(Color.valueOf("2F6E2A"));
             default:
                 throw new IllegalArgumentException("unknown palette char '" + c + "'");
         }
@@ -104,6 +106,13 @@ public final class PixelArt {
             ".A.",
             "AWA",
             ".A.",
+    };
+
+    /** Leaf flung off Bulbasaur's vine as it cracks. */
+    public static final String[] LEAF = {
+            ".GG",
+            "GDG",
+            "GG.",
     };
 
     public static final String[] SPARK = {

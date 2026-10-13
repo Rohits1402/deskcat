@@ -61,6 +61,7 @@ taskbar-free window and reacts to what you do — inspired by desktop pets like
 | `blackcat` | amber cat eyes | arches and hisses, fur bristling, then swipes |
 | `doge` | smug squinting eyes | digs frantically, flinging dirt |
 | `goldfish` | one eye, in profile | puffs up like a pufferfish, blowing bubbles |
+| `bulbasaur` | outlined red eyes | Vine Whip — a vine cracks up out of each side of its bulb |
 
 All sprites are drawn in code as hand-placed pixel shapes (each part an
 SVG-style path) with one clean outline grown around the whole pet. There are

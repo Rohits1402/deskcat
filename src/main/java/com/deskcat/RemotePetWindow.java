@@ -142,7 +142,7 @@ public class RemotePetWindow implements ApplicationListener {
         Texture pose = null;
         float poseX = 0f;
         if (walking && a.walkTex != null) {
-            pose = a.walkTex[((int) (time * 8f)) % a.walkTex.length];
+            pose = a.walkTex[((int) (time * 14f)) % a.walkTex.length];
             poseX = 22f - pose.getWidth() / 2f;
         } else if (sleeping && a.sleepTex != null) {
             pose = a.sleepTex[((int) (time / 1.1f)) % a.sleepTex.length];
