@@ -28,6 +28,9 @@ final class SoundFx {
     /** 0..1 master level, set from the tray's volume flyout; 0 is silence. */
     static volatile float volume = 0.8f;
 
+    /** Quiet mode or a fullscreen app in front: silence without touching the level. */
+    static volatile boolean muted;
+
     private static short[] meowPcm, pikaPcm, squirtlePcm, splashPcm, chirpPcm;
     private static short[] hissPcm, borkPcm, blubPcm, vinePcm;
 
@@ -39,7 +42,7 @@ final class SoundFx {
 
     /** Cat voice: the bundled CC0 meow recording, else synthesis. */
     static void meow() {
-        if (volume <= 0f) {
+        if (volume <= 0f || muted) {
             return;
         }
         if (!meowClipTried) {
@@ -141,7 +144,7 @@ final class SoundFx {
 
     private static void play(final short[] pcm) {
         final float gain = volume;
-        if (gain <= 0f) {
+        if (gain <= 0f || muted) {
             return;
         }
         Thread t = new Thread(new Runnable() {

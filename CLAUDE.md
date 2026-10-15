@@ -38,7 +38,9 @@ Key mechanics that span the codebase:
 - **Taskbar removal**: Win32 `WS_EX_TOOLWINDOW` set through LWJGL's User32 bindings in `hideFromTaskbar()`.
 - **Poses**: each skin's art file builds whole-frame poses (8-frame side-view walk, sleep, belly-up roll, Squirtle's shell) as `PoseArt.Grid`s (plain RGBA8888). **Every pose must look like the same animal as the sitting drawing** - same head size, eyes, ears and markings: sleep reuses the sitting head resting on its paws, belly-up is the sitting drawing turned upside down (Bulbasaur, which can't roll onto its bulb, beams instead). Walks use [Gait.java](src/main/java/com/deskcat/Gait.java): jointed legs posed per phase in a lateral-sequence walk (quadrupeds) or heel-to-toe steps (bipeds), with the bob, head lag and sway baked into the frames - CatApp no longer adds a bounce for skins with walk frames, and plays them at a rate derived from the window's speed so planted feet don't slide. While a pose plays (`CatApp.poseFrame()`), it replaces body + tail + runtime eyes, so poses bake their eyes in; poses wider than the sitting body are clamped inside the FBO. Walk frames face right and are centred on the FBO mirror axis.
 - **Wander states**: 0 home, 1 falling, 2 floor patrol, 3 walking home, 4 hop up to home, 5 free swim (goldfish), 6 parabolic window hop (`hopTo`, used by pounces and perching), 7 perched. `seated()` (0 or 7) gates sit-still behaviours; `roaming()` and `moving()` group the others.
-- **Perching**: [Win32Windows.java](src/main/java/com/deskcat/Win32Windows.java) reads the foreground window's rect/visibility/class/process via LWJGL's User32 plus `JNI` trampolines for the calls LWJGL doesn't bind. It refuses our own process, maximised/minimised/tool windows and shell surfaces (taskbar, desktop). All failures degrade to "nothing to perch on".
+- **Perching**: [Win32Windows.java](src/main/java/com/deskcat/Win32Windows.java) reads the foreground window's rect/visibility/class/process via LWJGL's User32 plus `JNI` trampolines for the calls LWJGL doesn't bind. It refuses our own process, maximised/minimised/tool windows and shell surfaces (taskbar, desktop). All failures degrade to "nothing to perch on". The same class answers `fullscreenOver()` (a caption-less foreground window of another program covering the pet's whole monitor), polled once a second; while true the pet window is hidden and the pet goes quiet.
+- **Click-through**: `updateClickThrough()` reads a 5×5 block of the back buffer under the cursor after drawing; empty pixels turn on GLFW mouse-passthrough. Window input handlers only ever fire over visible pixels.
+- **Session-only tray toggles**: "Quiet mode" (`SoundFx.muted`, no wandering/perching/reminders) and "Multiplayer" (off at every launch; off = `lan` is null and no socket is open; every LAN path null-checks it).
 
 ## Constraints
 
@@ -50,7 +52,8 @@ Key mechanics that span the codebase:
   the only runtime file writes are that updater's temp jar + swap script; the
   only registry access is the user-toggled `HKCU\...\Run` startup entry; the
   only look at other programs is `Win32Windows` reading window geometry
-  and identity for perching (read-only: never input, focus or state changes)
+  and identity for perching and fullscreen detection (read-only: never
+  input, focus or state changes)
   (via `reg.exe`). Never add anything beyond those. Reminder/sound settings
   are deliberately session-only — do not add a config file.
 - Sounds are synthesized PCM in

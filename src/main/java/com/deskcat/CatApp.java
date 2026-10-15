@@ -15,6 +15,7 @@ import java.awt.SystemTray;
 import java.awt.Toolkit;
 import java.awt.TrayIcon;
 import java.awt.image.BufferedImage;
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.UUID;
@@ -49,6 +50,7 @@ import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 import com.badlogic.gdx.graphics.g2d.TextureRegion;
 import com.badlogic.gdx.graphics.glutils.FrameBuffer;
 import com.badlogic.gdx.math.MathUtils;
+import com.badlogic.gdx.utils.BufferUtils;
 
 /**
  * A pixel pet that sits on the desktop in a transparent, always-on-top window
@@ -279,6 +281,22 @@ public class CatApp extends ApplicationAdapter {
     private boolean hidden;
     private int prevHideX, prevHideY;
 
+    // a fullscreen game / video / slideshow in front on our monitor: the pet
+    // (and friends' pets) step aside and go quiet until it's gone
+    private boolean fullscreen;
+    private float fullscreenCheckIn;
+    private long ownHwnd;
+
+    // tray toggles (session-only): quiet mode silences the pet and keeps it
+    // at home; multiplayer off closes the LAN socket entirely
+    private volatile boolean quiet;
+    private volatile boolean multiplayer;   // off until switched on from the tray
+
+    // clicks on the window's empty pixels fall through to whatever is below
+    private static final int HIT_PX = 5;
+    private final ByteBuffer hitPixels = BufferUtils.newByteBuffer(HIT_PX * HIT_PX * 4);
+    private boolean passThrough;
+
     private static class Particle {
         float x, y, vx, vy, grav, life, maxLife, scale;
         Texture tex;
@@ -314,6 +332,12 @@ public class CatApp extends ApplicationAdapter {
         window = ((Lwjgl3Graphics) Gdx.graphics).getWindow();
         WindowTricks.floating(window);
         WindowTricks.applyExStyles(window, false);
+        try {
+            ownHwnd = org.lwjgl.glfw.GLFWNativeWin32.glfwGetWin32Window(
+                    window.getWindowHandle());
+        } catch (Throwable t) {
+            ownHwnd = 0;   // non-Windows: never treated as under a fullscreen app
+        }
         setupTray();
         setupKeyboardHook();
         SystemAudio.start();
@@ -326,8 +350,7 @@ public class CatApp extends ApplicationAdapter {
         remoteMgr = new RemotePetsManager((Lwjgl3Application) Gdx.app, font, px,
                 (peer, text) -> doSendChat(text, peer.id),
                 peer -> shoot(peer.id));
-        lan = new LanClient(selfId);
-        lan.start();   // failure is silent; the pet just stays solo
+        // multiplayer starts off: no LAN socket until the tray turns it on
 
         Thread boot = new Thread(() -> {
             try {
@@ -362,6 +385,9 @@ public class CatApp extends ApplicationAdapter {
                     return true;
                 }
                 if (button == Input.Buttons.MIDDLE) {
+                    if (lan == null) {
+                        return true;   // multiplayer off: no chat
+                    }
                     ChatInput.show(window.getPositionX(), window.getPositionY(),
                             text -> Gdx.app.postRunnable(() -> sendChat(text)));
                     return true;
@@ -432,9 +458,11 @@ public class CatApp extends ApplicationAdapter {
         int mx = p == null ? window.getPositionX() : p.x;
         int my = p == null ? window.getPositionY() : p.y;
         ArrayList<PetMenu.Item> items = new ArrayList<PetMenu.Item>();
-        items.add(new PetMenu.Item("Say…", () ->
-                ChatInput.show(window.getPositionX(), window.getPositionY(),
-                        text -> Gdx.app.postRunnable(() -> sendChat(text)))));
+        if (lan != null) {
+            items.add(new PetMenu.Item("Say…", () ->
+                    ChatInput.show(window.getPositionX(), window.getPositionY(),
+                            text -> Gdx.app.postRunnable(() -> sendChat(text)))));
+        }
         if (ownBubble.isActive(System.currentTimeMillis())) {
             items.add(new PetMenu.Item("Dismiss bubble", () ->
                     Gdx.app.postRunnable(ownBubble::clear)));
@@ -488,19 +516,118 @@ public class CatApp extends ApplicationAdapter {
         }
     }
 
+    /**
+     * Tray "Multiplayer": off closes the LAN socket (saying goodbye, so our
+     * pet leaves friends' screens), drops their pets here and disables chat
+     * and shooting; on opens a fresh socket.
+     */
+    private void setMultiplayer(boolean on) {
+        if (on == (lan != null)) {
+            return;
+        }
+        if (on) {
+            lan = new LanClient(selfId);
+            lan.start();   // failure is silent; the pet just stays solo
+        } else {
+            lan.close();
+            lan = null;
+            peerReg = new PeerRegistry(selfId);
+            remoteMgr.closeAll();
+            pendingShotIn = -1f;
+        }
+    }
+
+    /** Tray "Quiet mode": no sounds, wandering, perching or reminders. */
+    private void setQuiet(boolean on) {
+        quiet = on;
+        if (!on) {
+            return;
+        }
+        if (wanderState == 7 || (wanderState == 6 && hopNext == 7)) {
+            perchHwnd = 0;
+            hopTo(homeX, homeY, 0);
+        } else if (roaming()) {
+            beginReturn();
+        }
+    }
+
+    /**
+     * Once a second: is a fullscreen app in front on our monitor? Then hide
+     * the pet and friends' pets until it goes away.
+     */
+    private void updateFullscreen(float dt) {
+        fullscreenCheckIn -= dt;
+        if (fullscreenCheckIn > 0f) {
+            return;
+        }
+        fullscreenCheckIn = 1f;
+        boolean fs = !dragging && !pressed && Win32Windows.fullscreenOver(ownHwnd);
+        if (fs == fullscreen) {
+            return;
+        }
+        fullscreen = fs;
+        if (fs) {
+            WindowTricks.setShown(window, false);
+            remoteMgr.closeAll();
+        } else {
+            WindowTricks.setShown(window, true);
+            if (!hidden) {
+                WindowTricks.floating(window);
+            }
+        }
+    }
+
+    /**
+     * Let clicks through wherever the cursor is over an empty pixel of the
+     * window: reads a few pixels of what was just drawn under the cursor.
+     * Stays solid while the pet is held.
+     */
+    private void updateClickThrough() {
+        int bw = Gdx.graphics.getBackBufferWidth();
+        int bh = Gdx.graphics.getBackBufferHeight();
+        int cx = Math.round((cursor.x - mainWinX) * bw / (float) winW());
+        int cy = Math.round((cursor.y - mainWinY) * bh / (float) winH());
+        if (!cursorValid || cx < 0 || cy < 0 || cx >= bw || cy >= bh) {
+            return;   // not over our window: nothing to decide
+        }
+        boolean solid = pressed || dragging;
+        if (!solid) {
+            int x0 = MathUtils.clamp(cx - HIT_PX / 2, 0, Math.max(0, bw - HIT_PX));
+            int y0 = MathUtils.clamp(bh - 1 - cy - HIT_PX / 2, 0, Math.max(0, bh - HIT_PX));
+            hitPixels.clear();
+            Gdx.gl.glReadPixels(x0, y0, HIT_PX, HIT_PX,
+                    GL20.GL_RGBA, GL20.GL_UNSIGNED_BYTE, hitPixels);
+            for (int i = 3; i < HIT_PX * HIT_PX * 4; i += 4) {
+                if ((hitPixels.get(i) & 0xFF) > 16) {
+                    solid = true;
+                    break;
+                }
+            }
+        }
+        if (passThrough == solid) {
+            passThrough = !solid;
+            WindowTricks.setClickThrough(window, passThrough);
+        }
+    }
+
     /** Drain received LAN messages, sync peer windows, broadcast our state. */
     private void updateNet(float dt) {
+        if (lan == null) {
+            return;   // multiplayer switched off
+        }
         long now = System.currentTimeMillis();
         for (com.deskcat.net.LanMsg m = lan.poll(); m != null; m = lan.poll()) {
             peerReg.onMessage(m, now);
             if (m.type == LanMsg.ACTION && "shoot".equals(m.action)
                     && (m.target == null || m.target.isEmpty()
-                            || m.target.equals(selfId))) {
+                            || m.target.equals(selfId)) && !fullscreen) {
                 incomingShot(m.id);
             }
         }
         peerReg.prune(now);
-        remoteMgr.sync(peerReg.peers());
+        if (!fullscreen) {
+            remoteMgr.sync(peerReg.peers());
+        }
 
         if (pendingShotIn > 0f) {
             pendingShotIn -= dt;
@@ -555,6 +682,9 @@ public class CatApp extends ApplicationAdapter {
 
     /** targetId null → broadcast; otherwise a DM to that peer. */
     private void doSendChat(String text, String targetId) {
+        if (lan == null) {
+            return;
+        }
         if (text.trim().toLowerCase().startsWith("/shoot")) {
             shoot(targetId);
             return;
@@ -572,6 +702,9 @@ public class CatApp extends ApplicationAdapter {
 
     /** Fire at one peer (or everyone when targetId is null). */
     private void shoot(String targetId) {
+        if (lan == null) {
+            return;
+        }
         lan.send(LanProtocol.encodeAction(selfId, userName, "shoot", targetId));
         attack();   // our pet plays its signature attack as the muzzle flash
         float fromX = window.getPositionX() + winW() / 2f;
@@ -833,6 +966,22 @@ public class CatApp extends ApplicationAdapter {
             MenuItem soundItem = new MenuItem("Sound");
             soundItem.addActionListener(e -> VolumePopup.show());
             menu.add(soundItem);
+
+            final CheckboxMenuItem quietItem = new CheckboxMenuItem("Quiet mode", quiet);
+            quietItem.addItemListener(e -> {
+                boolean on = quietItem.getState();
+                Gdx.app.postRunnable(() -> setQuiet(on));
+            });
+            menu.add(quietItem);
+
+            final CheckboxMenuItem netItem =
+                    new CheckboxMenuItem("Multiplayer", multiplayer);
+            netItem.addItemListener(e -> {
+                multiplayer = netItem.getState();
+                boolean on = multiplayer;
+                Gdx.app.postRunnable(() -> setMultiplayer(on));
+            });
+            menu.add(netItem);
 
             final CheckboxMenuItem startupItem = new CheckboxMenuItem(
                     "Start with Windows", isStartupEnabled());
@@ -1115,6 +1264,8 @@ public class CatApp extends ApplicationAdapter {
         mainWinY = window.getPositionY();
 
         pollCursor(dt);
+        updateFullscreen(dt);
+        SoundFx.muted = quiet || fullscreen;
         updateMood(dt);
         updateWander(dt);
         updateSpring(dt);
@@ -1123,8 +1274,11 @@ public class CatApp extends ApplicationAdapter {
         updateParticles(dt);
         updateNet(dt);
 
-        renderCatToFbo();
-        renderWindow();
+        if (!fullscreen) {   // hidden under a fullscreen app: skip the drawing
+            renderCatToFbo();
+            renderWindow();
+            updateClickThrough();
+        }
     }
 
     private void pollCursor(float dt) {
@@ -1223,7 +1377,8 @@ public class CatApp extends ApplicationAdapter {
         stretchLeft -= dt;
         waterRemindLeft -= dt;
 
-        if (stretchOn && !dragging) {
+        boolean remindersPaused = quiet || fullscreen;
+        if (stretchOn && !dragging && !remindersPaused) {
             stretchIn -= dt;
             if (stretchIn <= 0f) {
                 stretchIn = STRETCH_EVERY;
@@ -1237,7 +1392,7 @@ public class CatApp extends ApplicationAdapter {
                 SoundFx.chirp();
             }
         }
-        if (waterOn && !dragging) {
+        if (waterOn && !dragging && !remindersPaused) {
             waterIn -= dt;
             if (waterIn <= 0f) {
                 waterIn = WATER_EVERY;
@@ -1685,7 +1840,8 @@ public class CatApp extends ApplicationAdapter {
 
         if (wanderState == 0) {
             boolean eligible = !sleeping && !dragging && !pressed && !petActive
-                    && !hidden && boltLeft <= 0f && waterLeft <= 0f
+                    && !hidden && !quiet && !fullscreen
+                    && boltLeft <= 0f && waterLeft <= 0f
                     && scratchLeft <= 0f && typingLeft <= 0f
                     && hissLeft <= 0f && digLeft <= 0f && puffLeft <= 0f
                     && stretchLeft <= 0f && waterRemindLeft <= 0f

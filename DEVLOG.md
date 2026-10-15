@@ -570,6 +570,29 @@ every pose must read as the same animal as the sitting drawing.
   head; vertical ones are clearly visible.)
 - Poses wider than the sitting body are clamped inside the FBO.
 
+## 26. Fullscreen step-aside, click-through, multiplayer + quiet toggles
+
+- **Fullscreen apps**: once a second `Win32Windows.fullscreenOver()` asks
+  whether the foreground window is another program with no title bar
+  filling the whole monitor the pet is on (games, fullscreen video,
+  slideshows; maximised apps keep WS_CAPTION, the desktop is a shell
+  class). While it is, the pet window is hidden (`WindowTricks.setShown`,
+  which never takes focus when showing again), friends' pets close, incoming
+  shots are ignored, sounds/wandering/perching/reminders pause and the pet
+  isn't drawn at all. Read-only, like the perch lookups.
+- **Click-through**: after drawing, `updateClickThrough()` reads a 5×5
+  block of the back buffer under the cursor; no visible pixel there turns
+  on GLFW mouse-passthrough, so clicks on the window's empty area reach the
+  app underneath. Solid while the pet is pressed or dragged.
+- **Tray "Multiplayer"** (session-only, **off at every launch**; no LAN
+  socket is opened until it's switched on): off closes the LAN
+  socket (the bye message removes our pet from friends' screens), drops
+  their pets locally and hides chat (Say…, middle-click) and shooting; on
+  opens a fresh socket.
+- **Tray "Quiet mode"** (session-only): mutes all sounds (`SoundFx.muted`,
+  the volume level is untouched), stops wandering and perching (a roaming
+  or perched pet heads home) and pauses the reminder timers.
+
 ## Current state
 
 - **Skins**: Squirtle (default), Pikachu, the original orange tabby, black
@@ -594,7 +617,6 @@ every pose must read as the same animal as the sitting drawing.
   Psyduck (headache), Bulbasaur (leaf volley).
 - Procedural zap/splash sound effects (libGDX `AudioDevice`, no asset files).
 - Launch-at-startup, packaged double-clickable EXE (jpackage).
-- Per-pixel click-through on transparent areas (Win32 layered window work).
 - Note: Pokémon skins are personal-use fan art — strip them before any
   public release; the cat, black cat, doge and goldfish are original and
   shippable.

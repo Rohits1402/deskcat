@@ -20,6 +20,17 @@ public final class WindowTricks {
                 GLFW.GLFW_FLOATING, GLFW.GLFW_TRUE);
     }
 
+    /** Hide or show the window; showing never takes focus from the user's app. */
+    public static void setShown(Lwjgl3Window window, boolean shown) {
+        long h = window.getWindowHandle();
+        if (shown) {
+            GLFW.glfwSetWindowAttrib(h, GLFW.GLFW_FOCUS_ON_SHOW, GLFW.GLFW_FALSE);
+            GLFW.glfwShowWindow(h);
+        } else {
+            GLFW.glfwHideWindow(h);
+        }
+    }
+
     /**
      * Toggle click-through via GLFW's native mouse-passthrough (raw
      * WS_EX_LAYERED needs SetLayeredWindowAttributes or the window stops
