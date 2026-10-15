@@ -93,6 +93,15 @@ final class Updater {
         }
     }
 
+    /** The jpackage launcher (DeskCat/DeskCat.exe beside app/), or null. */
+    static File appImageExe(File jar) {
+        if (jar == null || jar.getParentFile() == null) {
+            return null;
+        }
+        File exe = new File(jar.getParentFile().getParentFile(), "DeskCat.exe");
+        return exe.isFile() ? exe : null;
+    }
+
     /** Download the release jar to a temp file; null on failure. */
     static File download(Release r) {
         if (r.jarUrl == null) {
@@ -122,22 +131,31 @@ final class Updater {
 
     /**
      * Spawn a detached script that waits for this JVM to exit, replaces the
-     * running jar with the downloaded one, and relaunches it with the same
-     * JVM. The caller must exit the app afterwards.
+     * running jar with the downloaded one, and relaunches it: through the
+     * packaged DeskCat.exe when there is one (its bundled runtime has no
+     * javaw.exe), else with the same JVM. The caller must exit the app
+     * afterwards.
      */
     static boolean stageSwap(File newJar, File currentJar) {
         try {
             File script = File.createTempFile("deskcat-update-", ".cmd");
-            String javaw = new File(new File(System.getProperty("java.home"),
-                    "bin"), "javaw.exe").getAbsolutePath();
+            File exe = appImageExe(currentJar);
+            String relaunch;
+            if (exe != null) {
+                relaunch = "\"" + exe.getAbsolutePath() + "\"";
+            } else {
+                String javaw = new File(new File(System.getProperty("java.home"),
+                        "bin"), "javaw.exe").getAbsolutePath();
+                relaunch = "\"" + javaw + "\" -jar \""
+                        + currentJar.getAbsolutePath() + "\"";
+            }
             PrintWriter w = new PrintWriter(script, "US-ASCII");
             w.println("@echo off");
             w.println("timeout /t 3 /nobreak >nul");
             w.println("copy /y \"" + newJar.getAbsolutePath() + "\" \""
                     + currentJar.getAbsolutePath() + "\" >nul");
             w.println("del \"" + newJar.getAbsolutePath() + "\" >nul 2>nul");
-            w.println("start \"\" \"" + javaw + "\" -jar \""
-                    + currentJar.getAbsolutePath() + "\"");
+            w.println("start \"\" " + relaunch);
             w.println("del \"%~f0\"");
             w.close();
             Runtime.getRuntime().exec(new String[] {

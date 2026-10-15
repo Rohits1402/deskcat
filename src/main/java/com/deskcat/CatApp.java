@@ -1023,9 +1023,8 @@ public class CatApp extends ApplicationAdapter {
             if (jar == null) {
                 return null;   // dev mode: nothing sensible to register
             }
-            java.io.File exe = new java.io.File(
-                    jar.getParentFile().getParentFile(), "DeskCat.exe");
-            if (exe.isFile()) {
+            java.io.File exe = Updater.appImageExe(jar);
+            if (exe != null) {
                 return "\"" + exe.getAbsolutePath() + "\"";
             }
             String javaw = new java.io.File(new java.io.File(

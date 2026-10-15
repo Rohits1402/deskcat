@@ -88,6 +88,8 @@ Key mechanics that span the codebase:
   jpackage lives in the Temurin 21 install at `~/.jdks/jdk-21*` (the app
   still compiles for Java 8; the exe bundles the 21 runtime). The
   auto-updater works inside the app image too — it swaps `app/*.jar` in
-  place — but only when the unzipped folder is user-writable. The packaged
+  place and relaunches through `DeskCat.exe` (jpackage's trimmed runtime has
+  no `javaw.exe`; fixed after 1.6.0) — but only when the unzipped folder is
+  user-writable. The packaged
   exe must be closed before zipping; the launcher locks its own jar.
 - [DEVLOG.md](DEVLOG.md) is the project history and backlog; append to it when making significant changes.
