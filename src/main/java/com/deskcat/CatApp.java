@@ -55,7 +55,7 @@ import com.badlogic.gdx.utils.BufferUtils;
 /**
  * A pixel pet that sits on the desktop in a transparent, always-on-top window
  * with no taskbar button; a system-tray icon hosts the Exit menu. Drag to
- * carry it (it stretches like mochi), pet its head for hearts, click it for a
+ * carry it (it dangles and swings from the cursor), pet its head for hearts, click it for a
  * thunderbolt (pikachu skin), leave it alone and it falls asleep.
  */
 public class CatApp extends ApplicationAdapter {
@@ -137,6 +137,17 @@ public class CatApp extends ApplicationAdapter {
     // dragging
     private boolean dragging;
     private int grabDX, grabDY;
+    // carried: the skin's dangle loop (CarryArt) hanging from the cursor,
+    // swinging like a pendulum (radians) as the window is moved
+    private Texture[] carryTex;
+    private final TextureRegion carryRegion = new TextureRegion();
+    private float carryT, swing, swingVel, carryVx;
+    private int carryLastX;
+    /** Where the dangle art is held, in window units from the top-left. */
+    private static final int CARRY_GRAB_X = 22, CARRY_GRAB_Y = 2;
+    /** Extra window room while carried (units): each side, below and above. */
+    private static final int CARRY_PAD_X = 26, CARRY_PAD_B = 12, CARRY_PAD_T = 8;
+    private boolean carryBig;
 
     // gaze
     private float gazeX, gazeY;
@@ -230,7 +241,14 @@ public class CatApp extends ApplicationAdapter {
     private static final float WATER_EVERY = 45 * 60f;
     private volatile boolean stretchOn, waterOn;
     private float stretchIn, waterIn;
-    private float stretchLeft, waterRemindLeft, remindDropIn;
+    // while a reminder animation plays, stretchLeft / waterRemindLeft hold
+    // its remaining time; it waits (remindPending 1 stretch, 2 water) until
+    // the pet is sitting somewhere
+    private float stretchLeft, waterRemindLeft;
+    private int remindPending;
+    private Texture[] remindTex;
+    private ReminderArt.Anim remindAnim;
+    private float remindT;
 
     // grooving to whatever the system is playing
     private float musicAmp, musicAbove, musicBelow, noteIn;
@@ -376,6 +394,20 @@ public class CatApp extends ApplicationAdapter {
             t.setDaemon(true);
             t.start();
         }
+        // test hook: DESKCAT_TEST_REMIND=stretch|water fires that reminder
+        // shortly after launch instead of after 30 / 45 minutes
+        String testRemind = System.getenv("DESKCAT_TEST_REMIND");
+        if ("stretch".equals(testRemind) || "water".equals(testRemind)) {
+            Thread t = new Thread(() -> {
+                try {
+                    Thread.sleep(3000);
+                } catch (InterruptedException ignored) {
+                }
+                Gdx.app.postRunnable(() -> remindPending = "stretch".equals(testRemind) ? 1 : 2);
+            }, "deskcat-test-remind");
+            t.setDaemon(true);
+            t.start();
+        }
 
         Gdx.input.setInputProcessor(new InputAdapter() {
             @Override
@@ -426,6 +458,7 @@ public class CatApp extends ApplicationAdapter {
                 pressed = false;
                 if (dragging) {
                     dragging = false;
+                    shrinkAfterCarry();
                     squash.kick(3f);   // jelly wobble on release
                 }
                 return true;
@@ -754,8 +787,47 @@ public class CatApp extends ApplicationAdapter {
         sparkBurst(CAT_X + eyeCenterX, 18f, 12, sparkTex, 16f, 4f, 12f);
     }
 
+    /**
+     * While carried the pet swings and stretches well past its normal
+     * window, so the window grows by CARRY_PAD_X on each side, CARRY_PAD_B
+     * below and CARRY_PAD_T above. The cameras widen to match with the
+     * world origin unchanged, so everything draws in its usual units and
+     * stays in the same place on screen.
+     */
+    private void growForCarry() {
+        if (carryBig) {
+            return;
+        }
+        carryBig = true;
+        int padX = CARRY_PAD_X * scale, padB = CARRY_PAD_B * scale, padT = CARRY_PAD_T * scale;
+        int x = window.getPositionX() - padX, y = window.getPositionY() - padT;
+        Gdx.graphics.setWindowedMode(winW() + 2 * padX, winH() + padB + padT);
+        window.setPosition(x, y);
+        cam.setToOrtho(false, UNITS_W + 2 * CARRY_PAD_X, UNITS_H + CARRY_PAD_B + CARRY_PAD_T);
+        cam.position.set(UNITS_W / 2f, (UNITS_H + CARRY_PAD_T - CARRY_PAD_B) / 2f, 0f);
+        cam.update();
+        pxCam.setToOrtho(false, winW() + 2 * padX, winH() + padB + padT);
+        pxCam.position.set(winW() / 2f, (winH() + padT - padB) / 2f, 0f);
+        pxCam.update();
+    }
+
+    /** Back to the normal window, keeping the pet where it is on screen. */
+    private void shrinkAfterCarry() {
+        if (!carryBig) {
+            return;
+        }
+        carryBig = false;
+        int x = window.getPositionX() + CARRY_PAD_X * scale;
+        int y = window.getPositionY() + CARRY_PAD_T * scale;
+        Gdx.graphics.setWindowedMode(winW(), winH());
+        window.setPosition(x, y);
+        cam.setToOrtho(false, UNITS_W, UNITS_H);
+        pxCam.setToOrtho(false, winW(), winH());
+    }
+
     /** Resize the pet (and the chat/bubble camera); remote windows follow. */
     private void applyScale(int s) {
+        shrinkAfterCarry();
         int homeXu = window.getPositionX(), homeYu = window.getPositionY();
         scale = s;
         Gdx.graphics.setWindowedMode(winW(), winH());
@@ -772,6 +844,15 @@ public class CatApp extends ApplicationAdapter {
      */
     private void applySkin(String name) {
         skin = name;
+        if (remindAnim != null) {
+            endReminderAnim();   // that skin's frames are no use to this one
+        }
+        disposeCarry();
+        ReminderArt.Anim carry = CarryArt.carry(name);
+        carryTex = new Texture[carry.frames.length];
+        for (int i = 0; i < carryTex.length; i++) {
+            carryTex[i] = PixelArt.tex(carry.frames[i]);
+        }
         SkinAssets a = SkinAssets.get(name);
         eyeStyle = a.eyeStyle;
         attackType = a.attackType;
@@ -1120,6 +1201,92 @@ public class CatApp extends ApplicationAdapter {
         t.start();
     }
 
+    /**
+     * A due reminder waits until the pet is sitting, then plays the skin's
+     * own stretch or drink (ReminderArt) with a speech bubble; picking the
+     * pet up cuts it short.
+     */
+    private void updateReminderAnim(float dt) {
+        if (remindAnim == null && remindPending != 0 && seated() && !dragging
+                && !pressed && !hidden && !fullscreen) {
+            boolean stretch = remindPending == 1;
+            remindPending = 0;
+            remindAnim = stretch ? ReminderArt.stretch(skin) : ReminderArt.water(skin);
+            remindTex = new Texture[remindAnim.frames.length];
+            for (int i = 0; i < remindTex.length; i++) {
+                remindTex[i] = PixelArt.tex(remindAnim.frames[i]);
+            }
+            remindT = 0f;
+            wake();
+            rollLeft = 0f;
+            shellLeft = 0f;
+            crouchLeft = 0f;
+            groomLeft = 0f;
+            ownBubble.show(stretch ? "Stretch time!" : "Water break!",
+                    System.currentTimeMillis());
+            if (stretch) {
+                SoundFx.chirp();
+            } else {
+                SoundFx.splash();
+            }
+            if (stretch) {
+                stretchLeft = remindAnim.duration();
+            } else {
+                waterRemindLeft = remindAnim.duration();
+            }
+        }
+        if (remindAnim == null) {
+            return;
+        }
+        remindT += dt;
+        if (dragging || pressed || remindT >= remindAnim.duration()) {
+            endReminderAnim();
+            return;
+        }
+        float left = remindAnim.duration() - remindT;
+        if (stretchLeft > 0f) {
+            stretchLeft = left;
+        } else {
+            waterRemindLeft = left;
+        }
+    }
+
+    private void disposeCarry() {
+        if (carryTex != null) {
+            for (Texture t : carryTex) {
+                t.dispose();
+            }
+            carryTex = null;
+        }
+    }
+
+    private void endReminderAnim() {
+        if (remindTex != null) {
+            for (Texture t : remindTex) {
+                t.dispose();
+            }
+        }
+        remindTex = null;
+        remindAnim = null;
+        stretchLeft = 0f;
+        waterRemindLeft = 0f;
+    }
+
+    /** The reminder frame showing now, or null. */
+    private Texture reminderFrame() {
+        if (remindAnim == null) {
+            return null;
+        }
+        float t = remindT;
+        for (int i = 0; i < remindTex.length; i++) {
+            t -= remindAnim.secs[i];
+            if (t < 0f) {
+                return remindTex[i];
+            }
+        }
+        return remindTex[remindTex.length - 1];
+    }
+
     private void notifyTray(String title, String msg) {
         if (trayIcon != null) {
             trayIcon.displayMessage(title, msg, TrayIcon.MessageType.INFO);
@@ -1323,11 +1490,30 @@ public class CatApp extends ApplicationAdapter {
                     + Math.abs(cursor.y - pressGY) > 4;
             if (moved || pressT > 0.35f) {
                 dragging = true;
+                // picked up by the scruff: re-hang so the dangle art's
+                // grab point is under the cursor, then let it swing
+                growForCarry();
+                grabDX = (CARRY_GRAB_X + CARRY_PAD_X) * scale;
+                grabDY = (CARRY_GRAB_Y + CARRY_PAD_T) * scale;
+                carryT = 0f;
+                swing = 0f;
+                swingVel = 0f;
+                carryVx = 0f;
+                carryLastX = cursor.x;
             }
         }
 
         if (dragging) {
             window.setPosition(cursor.x - grabDX, cursor.y - grabDY);
+            carryT += dt;
+            // pendulum: the pet lags behind the hand's acceleration
+            float vx = (cursor.x - carryLastX) / dt;
+            carryLastX = cursor.x;
+            float prevVx = carryVx;
+            carryVx = MathUtils.lerp(carryVx, vx, 0.35f);
+            float acc = (carryVx - prevVx) / dt;
+            swingVel += (-60f * swing - 5f * swingVel - acc * 0.0012f) * dt;
+            swing = MathUtils.clamp(swing + swingVel * dt, -0.6f, 0.6f);
         }
     }
 
@@ -1373,38 +1559,31 @@ public class CatApp extends ApplicationAdapter {
         waterLeft -= dt;
         typingLeft -= dt;
         koT -= dt;
-        stretchLeft -= dt;
-        waterRemindLeft -= dt;
 
         boolean remindersPaused = quiet || fullscreen;
         if (stretchOn && !dragging && !remindersPaused) {
             stretchIn -= dt;
             if (stretchIn <= 0f) {
                 stretchIn = STRETCH_EVERY;
-                stretchLeft = 4f;   // long tall stretch, eyes closed
+                remindPending = 1;
                 wake();
                 if (roaming()) {
                     beginReturn();
                 }
-                notifyTray("Stretch time",
-                        "DeskCat is stretching - join it for a moment.");
-                SoundFx.chirp();
             }
         }
         if (waterOn && !dragging && !remindersPaused) {
             waterIn -= dt;
             if (waterIn <= 0f) {
                 waterIn = WATER_EVERY;
-                waterRemindLeft = 3f;
-                squash.kick(4f);    // excited hop
+                remindPending = 2;
                 wake();
                 if (roaming()) {
                     beginReturn();
                 }
-                notifyTray("Water break", "Time to drink some water.");
-                SoundFx.splash();
             }
         }
+        updateReminderAnim(dt);
         float sysPeak = SystemAudio.peak();
         musicAmp = MathUtils.lerp(musicAmp, Math.min(1f, sysPeak * 6f), 0.25f);
         if (!musicOn) {
@@ -1436,23 +1615,6 @@ public class CatApp extends ApplicationAdapter {
                 m.maxLife = 1.7f;
                 m.scale = MathUtils.randomBoolean() ? 1f : 1.5f;
                 particles.add(m);
-            }
-        }
-
-        if (waterRemindLeft > 0f) {
-            remindDropIn -= dt;
-            if (remindDropIn <= 0f) {
-                remindDropIn = 0.12f;
-                Particle d = new Particle();
-                d.tex = waterDropTex;
-                d.x = CAT_X + eyeCenterX + MathUtils.random(-7f, 7f);
-                d.y = 28f;
-                d.vx = MathUtils.random(-2f, 2f);
-                d.vy = MathUtils.random(8f, 14f);
-                d.grav = -50f;
-                d.maxLife = 1.2f;
-                d.scale = MathUtils.randomBoolean() ? 1f : 1.4f;
-                particles.add(d);
             }
         }
 
@@ -1567,10 +1729,6 @@ public class CatApp extends ApplicationAdapter {
             }
         }
 
-        // Squirtle hides while carried, then peeks out before popping back
-        if (shellTex != null && dragging) {
-            shellLeft = Math.max(shellLeft, 0.9f);
-        }
         float shellBefore = shellLeft;
         shellLeft -= dt;
         if (shellBefore > 0f && shellLeft <= 0f) {
@@ -2014,7 +2172,7 @@ public class CatApp extends ApplicationAdapter {
                 : (wanderState == 1 ? 1.12f          // stretch while falling
                 : (wanderState == 4 || wanderState == 6 ? 1.08f   // and mid-hop
                 : (crouchLeft > 0f ? 0.8f           // crouched to pounce
-                : (stretchLeft > 0f ? 1.5f : 1f))));  // reminder: tall stretch
+                : 1f)));
         scaleY = squash.update(target, dt);
     }
 
@@ -2107,8 +2265,7 @@ public class CatApp extends ApplicationAdapter {
 
         boolean closed = sleeping || blinkLeft > 0f || boltLeft > 0.15f
                 || groomLeft > 0f
-                || waterLeft > 0.2f
-                || (stretchLeft > 0.8f && stretchLeft < 3.4f);
+                || waterLeft > 0.2f;
         if (closed) {
             drawClosedEye(eyeLX + shake);
             if (!oneEye) {
@@ -2405,8 +2562,25 @@ public class CatApp extends ApplicationAdapter {
             float f = 0.76f + 0.08f * MathUtils.sin(time * 9f);
             batch.setColor(1f, f, f, 1f);   // flushed red
         }
-        batch.draw(fboRegion, CAT_X, bob, FBO_W / 2f, 0,
-                FBO_W, FBO_H, scaleX * puff, drawScaleY * puff, waddle);
+        Texture remindFrame = reminderFrame();
+        if (dragging && carryTex != null) {
+            // carried: the dangle loop hangs from the cursor and swings about
+            // it, with a springy stretch for a moment after pick-up
+            carryRegion.setRegion(carryTex[(int) (carryT / CarryArt.FRAME_SECS) % carryTex.length]);
+            float stretch = 1f + 0.18f * (float) Math.exp(-carryT * 7f)
+                    * MathUtils.cos(carryT * 30f);
+            float gx = CARRY_GRAB_X, gy = UNITS_H - CARRY_GRAB_Y;
+            batch.setColor(Color.WHITE);
+            batch.draw(carryRegion, 0, 0, gx, gy, UNITS_W, UNITS_H,
+                    1f, stretch, swing * MathUtils.radiansToDegrees);
+        } else if (remindFrame != null) {
+            // reminder animations are whole window-sized frames, props included
+            batch.setColor(Color.WHITE);
+            batch.draw(remindFrame, 0, 0, UNITS_W, UNITS_H);
+        } else {
+            batch.draw(fboRegion, CAT_X, bob, FBO_W / 2f, 0,
+                    FBO_W, FBO_H, scaleX * puff, drawScaleY * puff, waddle);
+        }
         batch.setColor(Color.WHITE);
         if (vineLeft > 0f) {
             drawVines(bob, scaleX * puff, drawScaleY * puff);
@@ -2466,6 +2640,8 @@ public class CatApp extends ApplicationAdapter {
 
     @Override
     public void dispose() {
+        endReminderAnim();
+        disposeCarry();
         if (lan != null) {
             lan.close();
         }

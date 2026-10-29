@@ -9,8 +9,9 @@ taskbar-free window and reacts to what you do — inspired by desktop pets like
 
 - **Eye tracking** — the pet's eyes follow your cursor anywhere on screen,
   even when the window has no focus.
-- **Mochi drag** — pick it up and it stretches like mochi; drop it and it
-  wobbles like jelly.
+- **Carry it** — pick it up and it dangles from your cursor in its own way
+  (the cat goes limp, the black cat sulks, Bulbasaur hangs by its vines...),
+  swinging as you move; drop it and it wobbles like jelly.
 - **Petting** — stroke its head with the cursor and hearts float up while it
   purrs.
 - **Keyboard kneading** — type anywhere and it kneads along with tiny paws

@@ -593,6 +593,56 @@ every pose must read as the same animal as the sitting drawing.
   the volume level is untouched), stops wandering and perching (a roaming
   or perched pet heads home) and pauses the reminder timers.
 
+## 27. Per-skin reminder animations
+
+- The stretch and water reminders no longer pop a Windows notification
+  and do a generic tall-stretch / drop shower. Each skin has its own pair
+  in [ReminderArt.java](src/main/java/com/deskcat/ReminderArt.java):
+  cat play-bow + yawn / laps from a bowl; black cat Halloween arch with
+  bristling fur + yawn / dips a paw in a glass and licks it; doge
+  play-bow + full-body shake / messy bowl slurp; Pikachu tiptoe reach
+  with cheek sparks / gulps a bottle; Squirtle shell then star pop /
+  drinks its own fountain; Bulbasaur vines reaching overhead with
+  drifting leaves / rain cloud waters the bulb; goldfish fin flare and
+  bend / chases and gulps a falling drop, then bubbles.
+- Frames are whole 44x42 window-space pictures (props like the bowl,
+  glass, bottle and cloud fit beside and above the pet) built from the
+  shipping sitting art with the runtime eyes baked in, plus new poses in
+  the PathArt format. CatApp draws the current frame in place of the FBO
+  while it plays; a "Stretch time!" / "Water break!" speech bubble shows
+  instead of the tray balloon.
+- A due reminder waits (`remindPending`) until the pet is sitting (home or
+  perched, not hidden or under a fullscreen app), then plays for ~4-5 s;
+  picking the pet up or switching skin ends it. Textures are built when it
+  starts and disposed when it ends.
+- Previewed as GIFs from a scratch harness (same pixels) before wiring
+  in. Test hook: `DESKCAT_TEST_REMIND=stretch|water` fires one 3 s after
+  launch.
+
+## 28. Carried pets dangle instead of stretching
+
+- The old mochi drag (the whole sprite stretched 1.2x) is replaced by a
+  per-skin carry pose in [CarryArt.java](src/main/java/com/deskcat/CarryArt.java):
+  the cat goes limp like a scruffed kitten, the black cat sulks (ears
+  back, half-lidded glare, tail lashing), the doge is held under its front
+  legs paddling, Pikachu is lifted under the arms with its feet kicking,
+  Squirtle swims in the air with a sweat drop (it no longer hides in its
+  shell when carried), Bulbasaur hangs from the cursor by its own vines,
+  the goldfish flops and gasps. 4 frames, window space, looped at 0.14 s.
+- On pick-up the grab offset snaps to the art's grab point, so the pet
+  hangs from the cursor wherever you clicked it. A pendulum driven by the
+  cursor's horizontal acceleration swings it about that point, plus a
+  short springy stretch right after pick-up so it still feels soft; the
+  release wobble is unchanged.
+- The swing and stretch carry the art well past the 44x42 window, which
+  clipped it, so while carried the window grows (`growForCarry()`: 26
+  units each side, 12 below, 8 above) with the cameras widened around an
+  unchanged world origin, and shrinks back on release
+  (`shrinkAfterCarry()`), the pet staying put on screen both times.
+- Pikachu's and Bulbasaur's first drafts were just their sitting pose
+  with legs added and didn't read as "being held"; redone as a lifted
+  baby and as hanging by the vines.
+
 ## Current state
 
 - **Skins**: Squirtle (default), Pikachu, the original orange tabby, black
