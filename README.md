@@ -100,7 +100,7 @@ flavors:
   have Java 8+:
 
 ```
-java -jar deskcat-1.8.0.jar
+java -jar deskcat-1.8.1.jar
 ```
 
 The app checks GitHub Releases for a newer version shortly after startup;
