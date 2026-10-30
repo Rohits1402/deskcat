@@ -704,6 +704,17 @@ every pose must read as the same animal as the sitting drawing.
 - Windows' own shell overlays (Start, Task view, the notification centre)
   live in a higher band no normal app can beat.
 
+## 32. Bulbasaur's eyes
+
+- The sitting Bulbasaur's sockets were filled solid red with only a tiny
+  moving pupil, which read as bloodshot ("high"). New eyeStyle 6: the
+  socket is baked white (GLINT zone) and the runtime draws a 3x3 red iris
+  with an upright pupil and a glint that follows the cursor, resting
+  toward the nose so it looks at you; startled, the pupil fills it.
+  Closed eyes cover the socket like style 5. CatApp, RemotePetWindow and
+  the baked frames (`ReminderArt.eyes()`, used by reminders, tricks and
+  carry) all draw it; the side-view walk eye got the same white + iris.
+
 ## Current state
 
 - **Skins**: Squirtle (default), Pikachu, the original orange tabby, black

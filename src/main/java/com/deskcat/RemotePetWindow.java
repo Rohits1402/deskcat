@@ -215,7 +215,7 @@ public class RemotePetWindow implements ApplicationListener {
     private void drawEye(SkinAssets a, float eyeX, boolean closed, float bob,
             float sx, float cx, float ga) {
         float x = sx > 0 ? eyeX : 2 * cx - eyeX - a.eyeW;
-        if (closed && a.eyeStyle == 5) {
+        if (closed && (a.eyeStyle == 5 || a.eyeStyle == 6)) {
             tint(a.furColor, ga);
             batch.draw(px, x, bob + a.eyeY - 1, a.eyeW, a.eyeH + 2);
             batch.draw(px, x - 1, bob + a.eyeY, a.eyeW + 2, a.eyeH);
@@ -226,6 +226,16 @@ public class RemotePetWindow implements ApplicationListener {
             batch.draw(px, x, bob + a.eyeY, a.eyeW, a.eyeH);
             tint(C_OUTLINE, ga);
             batch.draw(px, x, bob + a.eyeY + 1, a.eyeW, 1);
+        } else if (a.eyeStyle == 6) {
+            // red iris with an upright pupil and a glint, on the white,
+            // resting toward the nose
+            float ix = x + (eyeX < a.eyeCenterX ? 1 : 0);
+            tint(a.irisColor, ga);
+            batch.draw(px, ix, bob + a.eyeY + 1, 3, 3);
+            tint(C_OUTLINE, ga);
+            batch.draw(px, ix + 1, bob + a.eyeY + 1, 1, 2);
+            batch.setColor(1f, 1f, 1f, ga);
+            batch.draw(px, ix, bob + a.eyeY + 3, 1, 1);
         } else if (a.eyeStyle == 5) {
             tint(C_OUTLINE, ga);   // pupil in the baked iris
             batch.draw(px, x + 1, bob + a.eyeY + 1, 2, 2);

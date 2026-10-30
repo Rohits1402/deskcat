@@ -15,8 +15,9 @@ import com.badlogic.gdx.graphics.Texture;
  */
 public class SkinAssets {
 
-    // eye styles: 0 = iris on white patch (cat), 1 = solid bead (pikachu),
-    // 2 = outlined iris block (squirtle)
+    // eye styles: 1 = solid bead (doge, goldfish), 4 = round bead (pikachu),
+    // 5 = baked socket + moving pupil (cats, squirtle), 6 = white baked
+    // socket + moving red iris and pupil (bulbasaur); 0/2 are no longer used.
     public int eyeStyle;
     // 0 = paw swipe (cat), 1 = thunderbolt (pikachu), 2 = water gun
     // (squirtle), 3 = hiss + swipe (black cat), 4 = dig (doge),
@@ -149,7 +150,7 @@ public class SkinAssets {
             a.irisColor = C_IRIS_BROWN;
             a.pawTex = PixelArt.tex(PathArt.paw(DogArt.SHIBA, PathArt.CREAM));
         } else if ("bulbasaur".equals(skin)) {
-            a.eyeStyle = 5;      // baked sockets, moving pupils
+            a.eyeStyle = 6;      // white baked sockets; red iris + pupil drawn at runtime
             a.attackType = 6;    // Vine Whip
             a.bodyTex = PixelArt.tex(BulbArt.sitBody());
             a.tailTex = frames(3, BulbArt::sitTail);    // the bulb, behind the head

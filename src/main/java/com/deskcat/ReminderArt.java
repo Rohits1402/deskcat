@@ -255,13 +255,22 @@ final class ReminderArt {
     static final Eye CAT_EYE = new Eye(5, 8, 20, 4, 4, 17, "F29A4B", "26202A", false);
     static final Eye BLACK_EYE = new Eye(5, 8, 20, 4, 4, 17, "2E2936", "ECE8F4", false);
     static final Eye SQUIRT_EYE = new Eye(5, 9, 21, 4, 4, 16, "8CCFE8", "22313F", false);
-    static final Eye BULBA_EYE = new Eye(5, 7, 23, 4, 4, 12, "79CBB0", "1F3B33", false);
+    static final Eye BULBA_EYE = new Eye(6, 7, 23, 4, 4, 12, "79CBB0", "1F3B33", false);
     static final Eye PIKA_EYE = new Eye(4, 10, 20, 4, 5, 12, "F7D23E", "26202A", false);
     static final Eye DOGE_EYE = new Eye(1, 10, 21, 3, 2, 17, "D9A066", "26202A", false);
     static final Eye FISH_EYE = new Eye(1, 25, 25, 3, 3, 13, "FF8C3A", "26202A", true);
 
     static final int OPEN = 0, CLOSED = 1, HAPPY = 2, RIGHT = 3, SMUG = 4, DIZZY = 5, XED = 6,
             ANGRY = 7;
+
+    static final int BULBA_IRIS = PoseArt.rgba("C8323E");
+
+    /** Bulbasaur's runtime eye (style 6): a 3x3 red iris, upright pupil, glint. */
+    static void redIris(F f, int x, int y) {
+        fbo(f, x, y, 3, 3, BULBA_IRIS);
+        fbo(f, x + 1, y, 1, 2, PUPIL_C);
+        fbo(f, x, y + 2, 1, 1, WHITE);
+    }
 
     /** An FBO-space rect (x right, y up) onto the window frame. */
     static void fbo(F f, int x, int y, int w, int h, int c) {
@@ -278,7 +287,9 @@ final class ReminderArt {
             int y = e.y;
             if (mode == OPEN || mode == RIGHT) {
                 int look = mode == RIGHT ? 1 : 0;
-                if (e.style == 5) {
+                if (e.style == 6) {                             // red iris on white
+                    redIris(f, x + Math.min(1, (x == e.lx ? 1 : 0) + look), y + 1);
+                } else if (e.style == 5) {
                     fbo(f, x + 1 + look, y + 1, 2, 2, PUPIL_C);
                     fbo(f, x + 1 + look, y + 2, 1, 1, WHITE);
                 } else if (e.style == 4) {
@@ -295,7 +306,9 @@ final class ReminderArt {
                 // a glare: the eye as usual, then a lid slanting down toward
                 // the nose, fur above it
                 boolean left = e.one || x == e.lx;
-                if (e.style == 5) {
+                if (e.style == 6) {
+                    redIris(f, x + (x == e.lx ? 1 : 0), y);
+                } else if (e.style == 5) {
                     fbo(f, x + 1, y, 2, 2, PUPIL_C);
                 } else if (e.style == 4) {
                     fbo(f, x + 1, y, e.w - 2, e.h, BEAD);
@@ -305,13 +318,13 @@ final class ReminderArt {
                 }
                 for (int i = -1; i <= e.w; i++) {
                     int inner = left ? i + 1 : e.w - i;           // 0 at the outer corner
-                    int lid = y + e.h - Math.min(e.h - 1, inner * (e.h - 1) / (e.w + 1)) - (e.style == 5 ? 0 : 1);
+                    int lid = y + e.h - Math.min(e.h - 1, inner * (e.h - 1) / (e.w + 1)) - (e.style >= 5 ? 0 : 1);
                     fbo(f, x + i, lid + 1, 1, y + e.h + 2 - lid, e.fur);
                     fbo(f, x + i, lid, 1, 1, e.line);
                 }
                 continue;
             }
-            if (mode == SMUG && e.style == 5) {
+            if (mode == SMUG && e.style >= 5) {
                 // half-lidded stare: pupil low and centred, lid over the top
                 fbo(f, x + 1, y, 2, 2, PUPIL_C);
                 fbo(f, x - 1, y + 2, e.w + 2, e.h - 1, e.fur);
@@ -319,7 +332,7 @@ final class ReminderArt {
                 continue;
             }
             if (mode == DIZZY || mode == XED) {
-                if (e.style == 5) {
+                if (e.style >= 5) {
                     fbo(f, x, y - 1, e.w, e.h + 2, e.fur);
                     fbo(f, x - 1, y, e.w + 2, e.h, e.fur);
                 } else {
@@ -342,7 +355,7 @@ final class ReminderArt {
                 }
                 continue;
             }
-            if (e.style == 5) {
+            if (e.style >= 5) {
                 fbo(f, x, y - 1, e.w, e.h + 2, e.fur);
                 fbo(f, x - 1, y, e.w + 2, e.h, e.fur);
             } else {

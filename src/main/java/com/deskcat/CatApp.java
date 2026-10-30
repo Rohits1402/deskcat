@@ -2680,6 +2680,23 @@ public class CatApp extends ApplicationAdapter {
                 batch.setColor(Color.WHITE);
                 batch.draw(px, pupilX, irisY + 1, 1, 1);
             }
+        } else if (eyeStyle == 6) {
+            // white baked socket; a 3x3 red iris with an upright pupil and a
+            // glint moves inside it, resting toward the nose so it looks at
+            // you. Startled: the pupil swallows the iris
+            int inner = eyeX < eyeCenterX ? 1 : 0;
+            float ix = eyeX + MathUtils.clamp(inner + pgx, 0, 1);
+            if (alertLeft > 0f || crouchLeft > 0f) {
+                batch.setColor(C_PUPIL);
+                batch.draw(px, ix, irisY, 3, 3);
+            } else {
+                batch.setColor(irisColor);
+                batch.draw(px, ix, irisY, 3, 3);
+                batch.setColor(C_PUPIL);
+                batch.draw(px, ix + 1, irisY, 1, 2);
+                batch.setColor(Color.WHITE);
+                batch.draw(px, ix, irisY + 2, 1, 1);
+            }
         } else if (eyeStyle == 4) {
             // round bead (corners cut) with a two-pixel glint following the gaze
             batch.setColor(C_OUTLINE);
@@ -2708,7 +2725,7 @@ public class CatApp extends ApplicationAdapter {
     }
 
     private void drawClosedEye(float eyeX) {
-        if (eyeStyle == 5) {
+        if (eyeStyle == 5 || eyeStyle == 6) {
             // fur over the socket (ring included), then a content curve
             batch.setColor(furColor);
             batch.draw(px, eyeX, eyeY - 1, eyeW, eyeH + 2);

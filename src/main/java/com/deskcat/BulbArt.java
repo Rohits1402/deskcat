@@ -72,10 +72,13 @@ final class BulbArt {
         fill(c, SIT_SPOT, PATTERN, 0, y, false);      // forehead spot
         markPair(c, 2, 17 + y, 2, 2);                 // cheek spots
         if (eyes == 0) {
+            // white eyes: the red iris and pupil are drawn over them at
+            // runtime (eyeStyle 6) so they can follow the cursor. A socket
+            // filled solid red read as bloodshot.
             fill(c, SIT_EYE_RING, RING, 0, y, false);
             fill(c, SIT_EYE_RING, RING, 0, y, true);
-            fill(c, SIT_EYE_IRIS, IRIS, 0, y, false);
-            fill(c, SIT_EYE_IRIS, IRIS, 0, y, true);
+            fill(c, SIT_EYE_IRIS, GLINT, 0, y, false);
+            fill(c, SIT_EYE_IRIS, GLINT, 0, y, true);
         } else {
             for (int ex : new int[] {5, 21}) {
                 if (eyes == 1) {
@@ -331,8 +334,9 @@ final class BulbArt {
         rect(c, 28, 9 + hb, 3, 2, PATTERN);            // forehead spot
         mark(c, 22, 14 + hb, 2, 2);                    // cheek spot
         fill(c, W_RING, RING, 0, hb, false);
-        fill(c, W_IRIS, IRIS, 0, hb, false);
-        rect(c, 31, 13 + hb, 2, 2, PUPIL);
+        fill(c, W_IRIS, GLINT, 0, hb, false);              // white eye, red iris ahead
+        rect(c, 31, 13 + hb, 2, 3, IRIS);
+        rect(c, 31, 14 + hb, 2, 1, PUPIL);
         px(c, 31, 13 + hb, GLINT);
         // the long smile runs back under the eye; open, with a tongue
         px(c, 37, 17 + hb, MOUTH);
