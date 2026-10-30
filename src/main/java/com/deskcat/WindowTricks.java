@@ -20,6 +20,27 @@ public final class WindowTricks {
                 GLFW.GLFW_FLOATING, GLFW.GLFW_TRUE);
     }
 
+    /**
+     * Put an always-on-top window back at the very top of the topmost band
+     * (above other always-on-top windows and the taskbar), without moving,
+     * resizing or activating it. Our own window only.
+     */
+    public static void raiseTopmost(long hwnd) {
+        if (hwnd == 0) {
+            return;
+        }
+        try {
+            org.lwjgl.system.windows.User32.SetWindowPos(hwnd,
+                    org.lwjgl.system.windows.User32.HWND_TOPMOST, 0, 0, 0, 0,
+                    org.lwjgl.system.windows.User32.SWP_NOMOVE
+                            | org.lwjgl.system.windows.User32.SWP_NOSIZE
+                            | org.lwjgl.system.windows.User32.SWP_NOACTIVATE
+                            | org.lwjgl.system.windows.User32.SWP_NOOWNERZORDER);
+        } catch (Throwable t) {
+            // non-Windows: GLFW's floating flag is all there is
+        }
+    }
+
     /** Hide or show the window; showing never takes focus from the user's app. */
     public static void setShown(Lwjgl3Window window, boolean shown) {
         long h = window.getWindowHandle();

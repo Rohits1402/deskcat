@@ -643,6 +643,67 @@ every pose must read as the same animal as the sitting drawing.
   with legs added and didn't read as "being held"; redone as a lifted
   baby and as hanging by the vines.
 
+## 29. Click tricks and idle fidgets
+
+- Clicking now plays a per-skin trick from
+  [TrickArt.java](src/main/java/com/deskcat/TrickArt.java) (the user picked
+  one of three ideas per pet): cat bats a yarn ball; black cat pushes a
+  mug off a shelf with a half-lidded stare and it smashes; doge zoomies
+  then flops belly-up; Pikachu charges, is struck by its own bolt with a
+  flash, ends up sooty with x-x eyes and shakes it off; Squirtle Rapid
+  Spin, popping out dizzy with circling stars; Bulbasaur Razor Leaf;
+  goldfish leap with a full flip and a splash. The skin's voice plays at
+  the start.
+- The old quick attacks (`signatureAttack()`) stay only as the muzzle
+  flash when shooting a friend's pet over LAN.
+- Idle fidgets play every 25-60 s while the pet sits calmly: paw lick,
+  face wash, ear scratch, cheek rub, shell polish, bulb droop and perk,
+  bubble.
+- Same window-space frame format as the reminders; `Anim` gained optional
+  per-frame window offsets (`dx`/`dy`), so travelling tricks (zoomies,
+  spin, leap) move the window, clamped to the work area, and put it back
+  where it started. Pressing the pet or picking it up cuts a trick short.
+  Shared eye modes grew RIGHT, SMUG, DIZZY and XED.
+- Click spam: a click trick (and the annoyed reaction) always plays to
+  the end; clicks during it don't restart it but are counted, and 3 or
+  more make the pet annoyed once the trick finishes
+  (`TrickArt.annoyed()`): the cats glare with an anger mark (the black cat
+  hisses) and turn their backs (a new back view), doge flops down and
+  sulks, Pikachu glares with crackling cheeks then folds its arms,
+  Squirtle hides in its shell glaring out, Bulbasaur crosses its vines,
+  the goldfish turns away. Clicks during the annoyed reaction are
+  ignored. Fidgets still give way to a click. New ANGRY eye mode.
+- Each skin's fidget, trick and annoyed frames are built once in
+  `applySkin()` (`loadTricks()`) instead of on every click.
+- Test hook: `DESKCAT_TEST_TRICK=click|fidget|spam` plays one 3 s after
+  launch (`spam` = a click plus three more during it).
+
+## 30. One-click update
+
+- The tray's "Check for updates" used to only find an update (relabelling
+  itself "Install update vX"), needing a second click to install. Now a
+  manual check that finds a newer release goes straight on to download,
+  swap and relaunch (`checkForUpdates(quiet, install)` →
+  `installUpdate()`). The silent check at launch still only notifies and
+  relabels the item, so nothing installs without a click. An `installing`
+  flag stops a double click from downloading twice.
+
+## 31. Always on top, for real
+
+- GLFW's floating flag only puts the window in the topmost band; within
+  it the most recently raised window wins, so the taskbar or any other
+  always-on-top app could sit over the pet until something reordered
+  them. Now `keepOnTop()` calls `SetWindowPos(HWND_TOPMOST, NOMOVE |
+  NOSIZE | NOACTIVATE)` on our own window every 0.5 s
+  (`WindowTricks.raiseTopmost()`), the way other desktop pets do. It
+  never takes focus.
+- Skipped while tucked behind the taskbar, while hidden for a fullscreen
+  app, and while one of our own windows is in front
+  (`Win32Windows.foregroundIsOurs()`: chat box, menus, patch notes), so
+  the pet never covers them.
+- Windows' own shell overlays (Start, Task view, the notification centre)
+  live in a higher band no normal app can beat.
+
 ## Current state
 
 - **Skins**: Squirtle (default), Pikachu, the original orange tabby, black

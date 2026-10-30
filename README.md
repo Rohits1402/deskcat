@@ -54,15 +54,17 @@ taskbar-free window and reacts to what you do — inspired by desktop pets like
 
 ## Skins
 
-| Skin | Eyes | Click attack |
-|------|------|--------------|
-| `squirtle` (default) | outlined iris blocks | water gun — droplet fountain with gravity |
-| `pikachu` | bead eyes with glint | thunderbolt — triple lightning strike |
-| `cat` | green cat eyes | paw swipe toward your cursor, claws out |
-| `blackcat` | amber cat eyes | arches and hisses, fur bristling, then swipes |
-| `doge` | smug squinting eyes | digs frantically, flinging dirt |
-| `goldfish` | one eye, in profile | puffs up like a pufferfish, blowing bubbles |
-| `bulbasaur` | outlined red eyes | Vine Whip — a vine cracks up out of each side of its bulb |
+| Skin | Click trick | Idle fidget |
+|------|-------------|-------------|
+| `squirtle` (default) | Rapid Spin — whirls across in its shell, pops out dizzy | polishes its shell |
+| `pikachu` | Thunderbolt — charges up, gets struck, frazzled, shakes it off | rubs its cheeks |
+| `cat` | bats a ball of yarn until it goes flying | ear flicks, licks a paw |
+| `blackcat` | stares at you while pushing a mug off a shelf | washes its face |
+| `doge` | zoomies, then flops belly-up panting | scratches its ear with a back leg |
+| `goldfish` | leaps out with a flip and splashes down | blows a bubble |
+| `bulbasaur` | Razor Leaf — fans of spinning leaves | bulb droops, then perks up |
+
+(A trick always plays to the end; click 3+ times during it and your pet gets annoyed afterwards. Shooting a friend's pet over LAN still plays the original quick attack as the muzzle flash.)
 
 All sprites are drawn in code as hand-placed pixel shapes (each part an
 SVG-style path) with one clean outline grown around the whole pet. There are
@@ -101,11 +103,11 @@ flavors:
 java -jar deskcat-1.7.0.jar
 ```
 
-The app checks GitHub Releases for a newer version shortly after startup
-(and on demand via the tray's "Check for updates"). If one exists, a tray
-notification appears and the menu item becomes "Install update" — clicking
-it downloads the new jar, swaps it in place, and relaunches. This check is
-the app's only network access; nothing is ever sent.
+The app checks GitHub Releases for a newer version shortly after startup;
+if one exists, a tray notification appears and the menu item becomes
+"Install update". One click on the tray's "Check for updates" (or "Install
+update") checks, downloads the new jar, swaps it in place and relaunches.
+This check is the app's only network access; nothing is ever sent.
 
 ## How it works
 

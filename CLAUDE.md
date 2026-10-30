@@ -43,6 +43,7 @@ Key mechanics that span the codebase:
 - **Session-only tray toggles**: "Quiet mode" (`SoundFx.muted`, no wandering/perching/reminders) and "Multiplayer" (off at every launch; off = `lan` is null and no socket is open; every LAN path null-checks it).
 - **Reminder animations**: [ReminderArt.java](src/main/java/com/deskcat/ReminderArt.java) builds each skin's stretch and water animation as whole window-sized (44x42) frames, props included, from the sitting art plus new PathArt poses. A due reminder sets `remindPending`, starts once `seated()`, replaces the FBO draw while it plays and shows a speech bubble (no tray balloon). `DESKCAT_TEST_REMIND=stretch|water` fires one 3 s after launch. Any new skin needs a pair here too.
 - **Carrying**: [CarryArt.java](src/main/java/com/deskcat/CarryArt.java) draws each skin's 4-frame dangle loop in the same window-space format (helpers shared with ReminderArt). When a press turns into a drag, `grabDX/grabDY` snap to the art's grab point (`CARRY_GRAB_X/Y`), so the pet hangs from the cursor; `renderWindow()` draws the loop rotated about that point by a pendulum (`swing`, driven by the cursor's horizontal acceleration) with a brief springy stretch, in place of the FBO. Textures are rebuilt per skin in `applySkin()`. Any new skin needs a carry pose too.
+- **Click tricks and fidgets**: [TrickArt.java](src/main/java/com/deskcat/TrickArt.java) gives each skin a click trick (`attack()` plays it with the skin's voice) and an idle fidget (every 25-60 s while calm, `updateTrick()`), same frame format. An `Anim` may carry per-frame window offsets (`dx`/`dy`, world units from where it started) for tricks that travel; the window is clamped to the work area and restored afterwards. Draw priority in `renderWindow()`: carry > trick > reminder > FBO. Clicks during a click trick don't restart it; they're counted (`clickSpam`) and `SPAM_CLICKS` or more play `TrickArt.annoyed()` when it ends. Frames are cached per skin (`loadTricks()`). The old attacks live on as `signatureAttack()`, used only as the LAN shoot muzzle flash. `DESKCAT_TEST_TRICK=click|fidget|spam` plays one 3 s after launch. Any new skin needs a trick, a fidget and an annoyed reaction too.
 
 ## Constraints
 
@@ -54,8 +55,8 @@ Key mechanics that span the codebase:
   the only runtime file writes are that updater's temp jar + swap script; the
   only registry access is the user-toggled `HKCU\...\Run` startup entry; the
   only look at other programs is `Win32Windows` reading window geometry
-  and identity for perching and fullscreen detection (read-only: never
-  input, focus or state changes)
+  and identity for perching, fullscreen detection and the keep-on-top
+  check (read-only: never input, focus or state changes to other programs)
   (via `reg.exe`). Never add anything beyond those. Reminder/sound settings
   are deliberately session-only — do not add a config file.
 - Sounds are synthesized PCM in

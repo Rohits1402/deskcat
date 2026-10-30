@@ -75,6 +75,21 @@ final class Win32Windows {
         }
     }
 
+    /** Whether the window in front is one of ours (chat box, menu, patch notes...). */
+    static boolean foregroundIsOurs() {
+        long hwnd = foreground();
+        if (hwnd == 0) {
+            return false;
+        }
+        try {
+            int[] pid = new int[1];
+            JNI.callPPI(hwnd, pid, fnPid);
+            return pid[0] == ownPid;
+        } catch (Throwable t) {
+            return false;
+        }
+    }
+
     /** Fills {left, top, right, bottom}; false if the window is gone. */
     static boolean rect(long hwnd, int[] out) {
         if (hwnd == 0 || !init()) {

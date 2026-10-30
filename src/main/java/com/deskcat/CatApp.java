@@ -250,6 +250,20 @@ public class CatApp extends ApplicationAdapter {
     private ReminderArt.Anim remindAnim;
     private float remindT;
 
+    // click tricks and idle fidgets (TrickArt); travelling ones move the
+    // window by their per-frame offsets from where they started
+    private static final int TRICK_FIDGET = 0, TRICK_CLICK = 1, TRICK_ANNOYED = 2;
+    /** Clicks during one trick that make the pet annoyed afterwards. */
+    private static final int SPAM_CLICKS = 3;
+    private final ReminderArt.Anim[] trickAnims = new ReminderArt.Anim[3];
+    private final Texture[][] trickTexs = new Texture[3][];
+    private ReminderArt.Anim trickAnim;
+    private Texture[] trickTex;
+    private int trickKind, clickSpam;
+    private float trickT;
+    private int trickX, trickY;
+    private float fidgetIn = MathUtils.random(25f, 60f);
+
     // grooving to whatever the system is playing
     private float musicAmp, musicAbove, musicBelow, noteIn;
     private boolean musicOn, danceNow;
@@ -303,6 +317,9 @@ public class CatApp extends ApplicationAdapter {
     // (and friends' pets) step aside and go quiet until it's gone
     private boolean fullscreen;
     private float fullscreenCheckIn;
+    // re-asserted every half second so other always-on-top windows (and
+    // the taskbar) never stay above the pet
+    private float raiseIn;
     private long ownHwnd;
 
     // tray toggles (session-only): quiet mode silences the pet and keeps it
@@ -391,6 +408,31 @@ public class CatApp extends ApplicationAdapter {
                 }
                 Gdx.app.postRunnable(() -> sendChat(testChat));
             }, "deskcat-test-chat");
+            t.setDaemon(true);
+            t.start();
+        }
+        // test hook: DESKCAT_TEST_TRICK=click|fidget|spam plays that trick
+        // shortly after launch (spam: a click, then three more during it)
+        String testTrick = System.getenv("DESKCAT_TEST_TRICK");
+        if ("click".equals(testTrick) || "fidget".equals(testTrick)
+                || "spam".equals(testTrick)) {
+            Thread t = new Thread(() -> {
+                try {
+                    Thread.sleep(3000);
+                } catch (InterruptedException ignored) {
+                }
+                Gdx.app.postRunnable(() -> {
+                    if ("click".equals(testTrick)) {
+                        attack();
+                    } else if ("spam".equals(testTrick)) {
+                        for (int i = 0; i < 4; i++) {
+                            attack();
+                        }
+                    } else {
+                        startTrick(TRICK_FIDGET);
+                    }
+                });
+            }, "deskcat-test-trick");
             t.setDaemon(true);
             t.start();
         }
@@ -585,6 +627,23 @@ public class CatApp extends ApplicationAdapter {
     }
 
     /**
+     * Twice a second, put the pet back on top of every other always-on-top
+     * window, like other desktop pets do - except while tucked behind the
+     * taskbar, hidden for a fullscreen app, or while one of our own windows
+     * (chat box, menus) is in front, which it would otherwise cover.
+     */
+    private void keepOnTop(float dt) {
+        raiseIn -= dt;
+        if (raiseIn > 0f) {
+            return;
+        }
+        raiseIn = 0.5f;
+        if (!hidden && !fullscreen && ownHwnd != 0 && !Win32Windows.foregroundIsOurs()) {
+            WindowTricks.raiseTopmost(ownHwnd);
+        }
+    }
+
+    /**
      * Once a second: is a fullscreen app in front on our monitor? Then hide
      * the pet and friends' pets until it goes away.
      */
@@ -739,7 +798,7 @@ public class CatApp extends ApplicationAdapter {
             return;
         }
         lan.send(LanProtocol.encodeAction(selfId, userName, "shoot", targetId));
-        attack();   // our pet plays its signature attack as the muzzle flash
+        signatureAttack();   // our pet plays its signature attack as the muzzle flash
         float fromX = window.getPositionX() + winW() / 2f;
         float fromY = window.getPositionY() + winH() / 2f;
         for (Peer p : peerReg.peers()) {
@@ -848,6 +907,11 @@ public class CatApp extends ApplicationAdapter {
             endReminderAnim();   // that skin's frames are no use to this one
         }
         disposeCarry();
+        if (trickAnim != null) {
+            endTrick();
+        }
+        clickSpam = 0;
+        loadTricks();
         ReminderArt.Anim carry = CarryArt.carry(name);
         carryTex = new Texture[carry.frames.length];
         for (int i = 0; i < carryTex.length; i++) {
@@ -1150,8 +1214,15 @@ public class CatApp extends ApplicationAdapter {
         }
     }
 
-    /** Quiet checks only speak up when an update exists. */
+    /**
+     * Quiet checks (at launch) only speak up when an update exists; the tray
+     * item's check (install = true) goes straight on to install it.
+     */
     private void checkForUpdates(final boolean quiet) {
+        checkForUpdates(quiet, false);
+    }
+
+    private void checkForUpdates(final boolean quiet, final boolean install) {
         Thread t = new Thread(() -> {
             Updater.Release r = Updater.fetchLatest();
             if (r == null) {
@@ -1161,7 +1232,10 @@ public class CatApp extends ApplicationAdapter {
                 }
                 return;
             }
-            if (Updater.isNewer(r.version, VERSION)) {
+            if (Updater.isNewer(r.version, VERSION) && install) {
+                pendingUpdate = r;
+                installUpdate(r);                  // one click: check and install
+            } else if (Updater.isNewer(r.version, VERSION)) {
                 pendingUpdate = r;
                 final String v = r.version;
                 java.awt.EventQueue.invokeLater(() -> {
@@ -1181,12 +1255,24 @@ public class CatApp extends ApplicationAdapter {
         t.start();
     }
 
+    /** The tray item: install the update already found, else check and install. */
     private void installOrCheck() {
         final Updater.Release r = pendingUpdate;
         if (r == null) {
-            checkForUpdates(false);
+            checkForUpdates(false, true);
             return;
         }
+        installUpdate(r);
+    }
+
+    private volatile boolean installing;
+
+    /** Download the release, swap it in and restart; safe from any thread. */
+    private void installUpdate(final Updater.Release r) {
+        if (installing) {
+            return;   // already downloading
+        }
+        installing = true;
         notifyTray("DeskCat", "Downloading v" + r.version + "...");
         Thread t = new Thread(() -> {
             java.io.File jar = Updater.runningJar();
@@ -1194,6 +1280,7 @@ public class CatApp extends ApplicationAdapter {
             if (jar != null && dl != null && Updater.stageSwap(dl, jar)) {
                 Gdx.app.postRunnable(() -> Gdx.app.exit());
             } else {
+                installing = false;
                 Updater.openReleasePage(r);   // dev mode or download failed
             }
         }, "deskcat-update-install");
@@ -1207,7 +1294,7 @@ public class CatApp extends ApplicationAdapter {
      * pet up cuts it short.
      */
     private void updateReminderAnim(float dt) {
-        if (remindAnim == null && remindPending != 0 && seated() && !dragging
+        if (remindAnim == null && trickAnim == null && remindPending != 0 && seated() && !dragging
                 && !pressed && !hidden && !fullscreen) {
             boolean stretch = remindPending == 1;
             remindPending = 0;
@@ -1272,6 +1359,108 @@ public class CatApp extends ApplicationAdapter {
         waterRemindLeft = 0f;
     }
 
+    /** Build this skin's trick, fidget and annoyed frames once, up front. */
+    private void loadTricks() {
+        disposeTricks();
+        ReminderArt.Anim[] a = {TrickArt.fidget(skin), TrickArt.click(skin), TrickArt.annoyed(skin)};
+        for (int k = 0; k < a.length; k++) {
+            trickAnims[k] = a[k];
+            trickTexs[k] = new Texture[a[k].frames.length];
+            for (int i = 0; i < a[k].frames.length; i++) {
+                trickTexs[k][i] = PixelArt.tex(a[k].frames[i]);
+            }
+        }
+    }
+
+    private void disposeTricks() {
+        for (int k = 0; k < trickTexs.length; k++) {
+            if (trickTexs[k] != null) {
+                for (Texture t : trickTexs[k]) {
+                    t.dispose();
+                }
+                trickTexs[k] = null;
+            }
+            trickAnims[k] = null;
+        }
+    }
+
+    private void startTrick(int kind) {
+        endTrick();
+        trickKind = kind;
+        trickAnim = trickAnims[kind];
+        trickTex = trickTexs[kind];
+        trickT = 0f;
+        trickX = window.getPositionX();
+        trickY = window.getPositionY();
+    }
+
+    private void endTrick() {
+        if (trickAnim != null && trickAnim.dx != null && !dragging) {
+            window.setPosition(trickX, trickY);   // back where it started
+        }
+        trickTex = null;
+        trickAnim = null;
+    }
+
+    /**
+     * Plays the current trick (moving the window for travelling ones) and,
+     * every so often while the pet sits calmly, starts an idle fidget.
+     */
+    private void updateTrick(float dt) {
+        if (trickAnim == null) {
+            boolean calm = seated() && !sleeping && !dragging && !pressed && !hidden
+                    && !fullscreen && !petActive && remindAnim == null
+                    && remindPending == 0 && !danceNow && !kneadNow
+                    && typingLeft <= 0f && rollLeft <= 0f && shellLeft <= 0f
+                    && crouchLeft <= 0f && groomLeft <= 0f && idleTime > 2f;
+            if (calm) {
+                fidgetIn -= dt;
+                if (fidgetIn <= 0f) {
+                    fidgetIn = MathUtils.random(25f, 60f);
+                    startTrick(TRICK_FIDGET);
+                }
+            }
+            return;
+        }
+        trickT += dt;
+        // a fidget gives way to a press; click tricks and the annoyed
+        // reaction always play out unless the pet is picked up
+        if (dragging || (trickKind == TRICK_FIDGET && pressed && trickT > 0.2f)) {
+            endTrick();
+            return;
+        }
+        if (trickT >= trickAnim.duration()) {
+            boolean spammed = trickKind == TRICK_CLICK && clickSpam >= SPAM_CLICKS;
+            endTrick();
+            clickSpam = 0;
+            if (spammed) {                         // clicked over and over: fed up
+                if (attackType == 0 || attackType == 3) {
+                    SoundFx.hiss();
+                } else {
+                    playVoice();
+                }
+                startTrick(TRICK_ANNOYED);
+            }
+            return;
+        }
+        if (trickAnim.dx != null) {
+            int i = trickAnim.index(trickT);
+            Rectangle area = screenArea(trickX + winW() / 2, trickY + winH() / 2);
+            int x = MathUtils.clamp(trickX + trickAnim.dx[i] * scale,
+                    area.x, area.x + area.width - winW());
+            int y = MathUtils.clamp(trickY + trickAnim.dy[i] * scale,
+                    area.y, area.y + area.height - winH());
+            if (x != window.getPositionX() || y != window.getPositionY()) {
+                window.setPosition(x, y);
+            }
+        }
+    }
+
+    /** The trick frame showing now, or null. */
+    private Texture trickFrame() {
+        return trickAnim == null ? null : trickTex[trickAnim.index(trickT)];
+    }
+
     /** The reminder frame showing now, or null. */
     private Texture reminderFrame() {
         if (remindAnim == null) {
@@ -1319,7 +1508,49 @@ public class CatApp extends ApplicationAdapter {
         return img;
     }
 
+    /**
+     * A click: the skin's trick (TrickArt), with its voice. Clicks while a
+     * trick or the annoyed reaction is playing don't restart it; they're
+     * counted, and enough of them make the pet annoyed once it finishes.
+     */
     private void attack() {
+        wake();
+        if (trickAnim != null && trickKind != TRICK_FIDGET) {
+            if (trickKind == TRICK_CLICK) {
+                clickSpam++;
+            }
+            return;
+        }
+        shellLeft = 0f;
+        rollLeft = 0f;
+        crouchLeft = 0f;
+        groomLeft = 0f;
+        if (remindAnim != null) {
+            endReminderAnim();
+        }
+        playVoice();
+        clickSpam = 0;
+        startTrick(TRICK_CLICK);
+    }
+
+    private void playVoice() {
+        switch (attackType) {
+            case 0: SoundFx.meow(); break;
+            case 1: SoundFx.pikaCry(); break;
+            case 2: SoundFx.squirtleCry(); break;
+            case 3: SoundFx.hiss(); break;
+            case 4: SoundFx.bork(); break;
+            case 5: SoundFx.blub(); break;
+            default: SoundFx.vineWhip(); break;
+        }
+    }
+
+    /**
+     * The skin's original quick attack (paw swipe, thunderbolt, water gun,
+     * hiss, dig, puff, Vine Whip), kept as the muzzle flash when shooting a
+     * friend's pet over LAN.
+     */
+    private void signatureAttack() {
         shellLeft = 0f;
         rollLeft = 0f;
         crouchLeft = 0f;
@@ -1431,6 +1662,7 @@ public class CatApp extends ApplicationAdapter {
 
         pollCursor(dt);
         updateFullscreen(dt);
+        keepOnTop(dt);
         SoundFx.muted = quiet || fullscreen;
         updateMood(dt);
         updateWander(dt);
@@ -1584,6 +1816,7 @@ public class CatApp extends ApplicationAdapter {
             }
         }
         updateReminderAnim(dt);
+        updateTrick(dt);
         float sysPeak = SystemAudio.peak();
         musicAmp = MathUtils.lerp(musicAmp, Math.min(1f, sysPeak * 6f), 0.25f);
         if (!musicOn) {
@@ -1755,7 +1988,7 @@ public class CatApp extends ApplicationAdapter {
 
         boolean busy = boltLeft > 0f || waterLeft > 0f || scratchLeft > 0f || vineLeft > 0f
                 || hissLeft > 0f || digLeft > 0f || puffLeft > 0f
-                || stretchLeft > 0f || waterRemindLeft > 0f || koT > 0f;
+                || stretchLeft > 0f || waterRemindLeft > 0f || koT > 0f || trickAnim != null;
         boolean calm = seated() && !sleeping && !dragging && !pressed && !hidden
                 && !petActive && typingLeft <= 0f && !danceNow && !busy
                 && rollLeft <= 0f && crouchLeft <= 0f && shellLeft <= 0f;
@@ -1997,7 +2230,7 @@ public class CatApp extends ApplicationAdapter {
 
         if (wanderState == 0) {
             boolean eligible = !sleeping && !dragging && !pressed && !petActive
-                    && !hidden && !quiet && !fullscreen
+                    && !hidden && !quiet && !fullscreen && trickAnim == null
                     && boltLeft <= 0f && waterLeft <= 0f
                     && scratchLeft <= 0f && typingLeft <= 0f
                     && hissLeft <= 0f && digLeft <= 0f && puffLeft <= 0f
@@ -2573,6 +2806,9 @@ public class CatApp extends ApplicationAdapter {
             batch.setColor(Color.WHITE);
             batch.draw(carryRegion, 0, 0, gx, gy, UNITS_W, UNITS_H,
                     1f, stretch, swing * MathUtils.radiansToDegrees);
+        } else if (trickFrame() != null) {
+            batch.setColor(Color.WHITE);
+            batch.draw(trickFrame(), 0, 0, UNITS_W, UNITS_H);
         } else if (remindFrame != null) {
             // reminder animations are whole window-sized frames, props included
             batch.setColor(Color.WHITE);
@@ -2641,6 +2877,8 @@ public class CatApp extends ApplicationAdapter {
     @Override
     public void dispose() {
         endReminderAnim();
+        endTrick();
+        disposeTricks();
         disposeCarry();
         if (lan != null) {
             lan.close();

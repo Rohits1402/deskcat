@@ -22,16 +22,38 @@ final class ReminderArt {
     }
 
     static final int W = 44, H = 42;
-    private static final int GROUND = H - 1;
+    static final int GROUND = H - 1;
 
     /** Frames and how long each one shows. */
     static final class Anim {
         final PoseArt.Grid[] frames;
         final float[] secs;
+        /**
+         * Where the window should be, per frame, in world units from where
+         * the animation started (null = it stays put): zoomies, leaps.
+         */
+        final int[] dx, dy;
 
         Anim(PoseArt.Grid[] frames, float[] secs) {
+            this(frames, secs, null, null);
+        }
+
+        Anim(PoseArt.Grid[] frames, float[] secs, int[] dx, int[] dy) {
             this.frames = frames;
             this.secs = secs;
+            this.dx = dx;
+            this.dy = dy;
+        }
+
+        /** Index of the frame showing t seconds in (the last past the end). */
+        int index(float t) {
+            for (int i = 0; i < frames.length; i++) {
+                t -= secs[i];
+                if (t < 0f) {
+                    return i;
+                }
+            }
+            return frames.length - 1;
         }
 
         float duration() {
@@ -174,28 +196,41 @@ final class ReminderArt {
         }
     }
 
-    private static final class Seq {
+    static final class Seq {
         final List<PoseArt.Grid> frames = new ArrayList<PoseArt.Grid>();
         final List<Float> secs = new ArrayList<Float>();
+        final List<int[]> offs = new ArrayList<int[]>();
+        boolean moves;
 
         Seq add(F f, float s) {
+            return add(f, s, 0, 0);
+        }
+
+        /** A frame shown with the window moved (dx, dy) units from the start. */
+        Seq add(F f, float s, int dx, int dy) {
             frames.add(f.g);
             secs.add(s);
+            offs.add(new int[] {dx, dy});
+            moves |= dx != 0 || dy != 0;
             return this;
         }
 
         Anim anim() {
             float[] s = new float[secs.size()];
+            int[] dx = new int[s.length], dy = new int[s.length];
             for (int i = 0; i < s.length; i++) {
                 s[i] = secs.get(i);
+                dx[i] = offs.get(i)[0];
+                dy[i] = offs.get(i)[1];
             }
-            return new Anim(frames.toArray(new PoseArt.Grid[0]), s);
+            PoseArt.Grid[] f = frames.toArray(new PoseArt.Grid[0]);
+            return moves ? new Anim(f, s, dx, dy) : new Anim(f, s);
         }
     }
 
-    private static final int WHITE = PoseArt.rgba("FFFFFF");
-    private static final int PUPIL_C = PoseArt.rgba("120F16");
-    private static final int BEAD = PoseArt.rgba("26202A");
+    static final int WHITE = PoseArt.rgba("FFFFFF");
+    static final int PUPIL_C = PoseArt.rgba("120F16");
+    static final int BEAD = PoseArt.rgba("26202A");
 
     // ============================================================== EYES
 
@@ -225,7 +260,8 @@ final class ReminderArt {
     static final Eye DOGE_EYE = new Eye(1, 10, 21, 3, 2, 17, "D9A066", "26202A", false);
     static final Eye FISH_EYE = new Eye(1, 25, 25, 3, 3, 13, "FF8C3A", "26202A", true);
 
-    static final int OPEN = 0, CLOSED = 1, HAPPY = 2;
+    static final int OPEN = 0, CLOSED = 1, HAPPY = 2, RIGHT = 3, SMUG = 4, DIZZY = 5, XED = 6,
+            ANGRY = 7;
 
     /** An FBO-space rect (x right, y up) onto the window frame. */
     static void fbo(F f, int x, int y, int w, int h, int c) {
@@ -240,17 +276,69 @@ final class ReminderArt {
     static void eyes(F f, Eye e, int mode) {
         for (int x : e.one ? new int[] {e.lx} : new int[] {e.lx, e.rx}) {
             int y = e.y;
-            if (mode == OPEN) {
+            if (mode == OPEN || mode == RIGHT) {
+                int look = mode == RIGHT ? 1 : 0;
                 if (e.style == 5) {
-                    fbo(f, x + 1, y + 1, 2, 2, PUPIL_C);
-                    fbo(f, x + 1, y + 2, 1, 1, WHITE);
+                    fbo(f, x + 1 + look, y + 1, 2, 2, PUPIL_C);
+                    fbo(f, x + 1 + look, y + 2, 1, 1, WHITE);
                 } else if (e.style == 4) {
                     fbo(f, x + 1, y, e.w - 2, e.h, BEAD);
                     fbo(f, x, y + 1, e.w, e.h - 2, BEAD);
-                    fbo(f, x + 1, y + e.h - 3, 1, 2, WHITE);
+                    fbo(f, x + 1 + look, y + e.h - 3, 1, 2, WHITE);
                 } else {
                     fbo(f, x, y, e.w, e.h, BEAD);
-                    fbo(f, x + 1, y + e.h - 1, 1, 1, WHITE);
+                    fbo(f, x + 1 + look, y + e.h - 1, 1, 1, WHITE);
+                }
+                continue;
+            }
+            if (mode == ANGRY) {
+                // a glare: the eye as usual, then a lid slanting down toward
+                // the nose, fur above it
+                boolean left = e.one || x == e.lx;
+                if (e.style == 5) {
+                    fbo(f, x + 1, y, 2, 2, PUPIL_C);
+                } else if (e.style == 4) {
+                    fbo(f, x + 1, y, e.w - 2, e.h, BEAD);
+                    fbo(f, x, y + 1, e.w, e.h - 2, BEAD);
+                } else {
+                    fbo(f, x, y, e.w, e.h, BEAD);
+                }
+                for (int i = -1; i <= e.w; i++) {
+                    int inner = left ? i + 1 : e.w - i;           // 0 at the outer corner
+                    int lid = y + e.h - Math.min(e.h - 1, inner * (e.h - 1) / (e.w + 1)) - (e.style == 5 ? 0 : 1);
+                    fbo(f, x + i, lid + 1, 1, y + e.h + 2 - lid, e.fur);
+                    fbo(f, x + i, lid, 1, 1, e.line);
+                }
+                continue;
+            }
+            if (mode == SMUG && e.style == 5) {
+                // half-lidded stare: pupil low and centred, lid over the top
+                fbo(f, x + 1, y, 2, 2, PUPIL_C);
+                fbo(f, x - 1, y + 2, e.w + 2, e.h - 1, e.fur);
+                fbo(f, x, y + 2, e.w, 1, e.line);
+                continue;
+            }
+            if (mode == DIZZY || mode == XED) {
+                if (e.style == 5) {
+                    fbo(f, x, y - 1, e.w, e.h + 2, e.fur);
+                    fbo(f, x - 1, y, e.w + 2, e.h, e.fur);
+                } else {
+                    fbo(f, x, y, e.w, e.h, e.fur);
+                }
+                int s = Math.min(e.w, 4);
+                for (int i = 0; i < s; i++) {
+                    if (mode == XED) {                         // x x
+                        fbo(f, x + i, y + i, 1, 1, e.line);
+                        fbo(f, x + s - 1 - i, y + i, 1, 1, e.line);
+                    } else {                                   // a little spiral
+                        fbo(f, x + i, y + s - 1, 1, 1, e.line);
+                        fbo(f, x + s - 1, y + i, 1, 1, e.line);
+                    }
+                }
+                if (mode == DIZZY) {
+                    fbo(f, x, y, s - 1, 1, e.line);
+                    fbo(f, x, y + 1, 1, Math.max(1, s - 2), e.line);
+                    fbo(f, x + 1, y + 1, 1, 1, e.line);
                 }
                 continue;
             }
@@ -366,7 +454,7 @@ final class ReminderArt {
 
     // ============================================================= CATS
 
-    private static F catSit(Palette p, int eyes, int tail) {
+    static F catSit(Palette p, int eyes, int tail) {
         F f = new F();
         f.put(CatArt.sitTail(p, tail), 25, H - 23);
         f.put(CatArt.sitBody(p), 4, H - 30);
@@ -375,7 +463,7 @@ final class ReminderArt {
     }
 
     /** The cat's mouth on a sitting frame: 0 shut, 1 opening, 2 wide yawn, 3 tongue out. */
-    private static F catMouth(F f, Palette p, int open) {
+    static F catMouth(F f, Palette p, int open) {
         int m = p == CatArt.BLACK ? p.outline : p.colour(MOUTH);
         int pink = p.colour(INNER_EAR);
         if (open == 1) {
@@ -505,7 +593,7 @@ final class ReminderArt {
     }
 
     /** The cat's sitting -> side transition: walk frame 0. */
-    private static F catStand(Palette p) {
+    static F catStand(Palette p) {
         return new F().put(CatArt.walk(p, 0), 4, GROUND - 28);
     }
 
@@ -544,7 +632,7 @@ final class ReminderArt {
      * left to the runtime), its right foreleg raised to (px, py) instead of
      * resting; 40x30 so the paw can reach outside the body.
      */
-    private static Canvas catSitArm(int px, int py) {
+    static Canvas catSitArm(int px, int py) {
         Canvas c = new Canvas(40, 30);
         Canvas e = new Canvas(28, 30);                     // mirrored parts, on the body's own width
         fillMirror(e, CatArt.SIT_EAR, FUR);
@@ -570,6 +658,18 @@ final class ReminderArt {
         fillMirror(r, CatArt.SIT_EYE_IRIS, IRIS);
         paste(c, r, 0, 0, false);
         rect(c, 13, 13, 2, 1, NOSE);
+        px(c, 12, 14, MOUTH);                                  // the ":3" mouth
+        px(c, 13, 15, MOUTH);
+        px(c, 14, 15, MOUTH);
+        px(c, 15, 14, MOUTH);
+        px(c, 10, 28, SEP);
+        // tabby markings (the black cat's palette hides them)
+        mark(c, 11, 6, 1, 2);
+        mark(c, 13, 5, 2, 2);
+        mark(c, 16, 6, 1, 2);
+        for (int[] m : new int[][] {{3, 11}, {23, 11}, {3, 13}, {23, 13}, {5, 20}, {21, 20}, {4, 23}, {22, 23}}) {
+            mark(c, m[0], m[1], 2, 1);
+        }
         limbOver(c, stroke(c, 4, new float[][] {{18, 21}, {px, py}}), FUR);
         return c;
     }
@@ -755,11 +855,11 @@ final class ReminderArt {
         return s.anim();
     }
 
-    private static final int[][] CAT_WHISKERS = {
+    static final int[][] CAT_WHISKERS = {
             {0, 13}, {1, 13}, {0, 15}, {1, 15}, {27, 13}, {26, 13}, {27, 15}, {26, 15}};
 
     /** The black cat sitting with its paw raised to (px, py) in body coordinates. */
-    private static F blackCatArm(int px, int py, int eyes, int tail) {
+    static F blackCatArm(int px, int py, int eyes, int tail) {
         Palette p = CatArt.BLACK;
         F f = new F();
         f.put(CatArt.sitTail(p, tail), 25, H - 23);
@@ -800,7 +900,7 @@ final class ReminderArt {
 
     // ============================================================== DOGE
 
-    private static F dogeSit(int eyes, int tail) {
+    static F dogeSit(int eyes, int tail) {
         F f = new F();
         f.put(DogArt.sitTail(tail), 28, H - 23);
         f.put(DogArt.sitBody(), 4, H - 30);
@@ -808,7 +908,7 @@ final class ReminderArt {
         return f;
     }
 
-    private static F dogeStand() {
+    static F dogeStand() {
         return new F().put(DogArt.walk(0), 3, GROUND - 28);
     }
 
@@ -882,7 +982,7 @@ final class ReminderArt {
 
     // =========================================================== PIKACHU
 
-    private static F pikaSit(int eyes, int tail) {
+    static F pikaSit(int eyes, int tail) {
         F f = new F();
         f.put(PikaArt.sitTail(tail), 25, H - 24);
         f.put(PikaArt.sitBody(), 4, H - 30);
@@ -891,7 +991,7 @@ final class ReminderArt {
     }
 
     /** Pikachu's open, delighted mouth on a sitting frame. */
-    private static F pikaMouth(F f) {
+    static F pikaMouth(F f) {
         Palette p = PikaArt.PIKA;
         return f.rect(16, 30, 6, 1, p.colour(MOUTH)).rect(17, 31, 4, 1, p.colour(INNER_EAR))
                 .rect(17, 32, 4, 1, p.colour(MOUTH));
@@ -989,7 +1089,7 @@ final class ReminderArt {
 
     // ========================================================== SQUIRTLE
 
-    private static F squirtSit(int eyes, int tail) {
+    static F squirtSit(int eyes, int tail) {
         F f = new F();
         f.put(SquirtArt.sitTail(tail), 27, H - 23);
         f.put(SquirtArt.sitBody(), 4, H - 30);
@@ -1053,7 +1153,7 @@ final class ReminderArt {
     }
 
     /** Squirtle's mouth wide open, gulping. */
-    private static F squirtGulp(F f) {
+    static F squirtGulp(F f) {
         Palette p = SquirtArt.SQUIRT;
         return f.rect(16, 27, 6, 4, p.colour(MOUTH)).rect(17, 28, 4, 2, p.colour(INNER_EAR));
     }
@@ -1098,7 +1198,7 @@ final class ReminderArt {
 
     // ========================================================= BULBASAUR
 
-    private static F bulbaSit(int eyes, int bulbFrame) {
+    static F bulbaSit(int eyes, int bulbFrame) {
         F f = new F();
         f.put(BulbArt.sitTail(bulbFrame), 7, H - 30);
         f.put(BulbArt.sitBody(), 4, H - 30);
