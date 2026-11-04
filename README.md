@@ -56,7 +56,7 @@ taskbar-free window and reacts to what you do — inspired by desktop pets like
 
 | Skin | Click trick | Idle fidget |
 |------|-------------|-------------|
-| `squirtle` (default) | Rapid Spin — whirls across in its shell, pops out dizzy | polishes its shell |
+| `squirtle` (default) | Rapid Spin — whirls across in its shell, pops out dizzy; every other click, Squirtle Squad — pulls shades out of its shell and strikes a pose | polishes its shell |
 | `pikachu` | Thunderbolt — charges up, gets struck, frazzled, shakes it off | rubs its cheeks |
 | `cat` | bats a ball of yarn until it goes flying | ear flicks, licks a paw |
 | `blackcat` | stares at you while pushing a mug off a shelf | washes its face |

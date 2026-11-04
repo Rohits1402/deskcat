@@ -26,6 +26,11 @@ final class TrickArt {
         }
     }
 
+    /** A second click trick that alternates with the first, or null. */
+    static Anim click2(String skin) {
+        return "squirtle".equals(skin) ? squirtleSquad() : null;
+    }
+
     static Anim fidget(String skin) {
         switch (skin) {
             case "squirtle": return squirtlePolish();
@@ -541,6 +546,89 @@ final class TrickArt {
             }
             s.add(f, 0.12f);
         }
+        s.add(squirtSit(OPEN, 0), 0.2f);
+        return s.anim();
+    }
+
+    private static final int SHADES = PoseArt.rgba("16161E");
+    private static final int SHADES_RIM = PoseArt.rgba("3A3A46");
+
+    /**
+     * The Squirtle Squad's sunglasses over its eyes, offset (dx, dy) from
+     * where they sit; glint 0-3 slides a shine across the lenses.
+     */
+    private static void shades(F f, int dx, int dy, int glint) {
+        int white = PoseArt.rgba("FFFFFF");
+        for (int lx : new int[] {9, 22}) {                      // two lenses and a bridge
+            f.rect(lx + dx, 21 + dy, 7, 5, SHADES);
+            f.rect(lx + 1 + dx, 26 + dy, 5, 1, SHADES);        // rounded bottoms
+            f.rect(lx + dx, 21 + dy, 7, 1, SHADES_RIM);
+        }
+        f.rect(16 + dx, 22 + dy, 6, 1, SHADES);
+        f.rect(6 + dx, 21 + dy, 3, 1, SHADES).rect(29 + dx, 21 + dy, 3, 1, SHADES);
+        if (glint >= 0) {
+            int gx = 10 + glint * 2;
+            f.set(gx + dx, 22 + dy, white).set(gx + 1 + dx, 23 + dy, white);
+            f.set(gx + 13 + dx, 22 + dy, white).set(gx + 14 + dx, 23 + dy, white);
+        }
+    }
+
+    /** Squirtle's open smile swapped for a cool, lopsided smirk. */
+    private static F smirk(F f) {
+        Palette p = SquirtArt.SQUIRT;
+        f.rect(15, 27, 8, 4, p.colour(FUR));
+        f.rect(16, 29, 4, 1, p.colour(MOUTH)).rect(20, 28, 2, 1, p.colour(MOUTH));
+        return f;
+    }
+
+    /** Folded shades held in a paw at (x, y). */
+    private static void foldedShades(F f, int x, int y) {
+        f.rect(x, y, 5, 2, SHADES).rect(x, y, 5, 1, SHADES_RIM);
+        f.set(x + 1, y + 1, PoseArt.rgba("FFFFFF"));
+    }
+
+    /**
+     * Squirtle Squad: reaches behind the rim of its shell (its pocket),
+     * pulls out folded shades, slips them on and strikes a cool pose.
+     */
+    private static Anim squirtleSquad() {
+        Palette p = SquirtArt.SQUIRT;
+        Seq s = new Seq();
+        s.add(squirtSit(OPEN, 0), 0.2f);
+        // reaching into its pocket behind the shell rim, rummaging
+        for (int i = 0; i < 3; i++) {
+            F f = squirtSit(RIGHT, i % 3);
+            f.put(leg(p, new float[][] {{27, 33}, {32, 36}, {34, 39 - i % 2}}, 3, FUR, 0), 0, 0);
+            s.add(f, 0.13f);
+        }
+        F out = squirtSit(RIGHT, 0);                            // ...got them
+        out.put(leg(p, new float[][] {{27, 33}, {33, 30}, {34, 26}}, 3, FUR, 0), 0, 0);
+        foldedShades(out, 32, 23);
+        s.add(out, 0.3f);
+        F up = squirtSit(OPEN, 1);                              // unfolds them in front of its face
+        up.put(leg(p, new float[][] {{27, 33}, {30, 28}}, 3, FUR, 0), 0, 0);
+        shades(up, 2, 5, -1);
+        s.add(up, 0.14f);
+        F on = squirtSit(OPEN, 0);
+        shades(on, 0, 0, 0);
+        spark(on, 30, 18);
+        s.add(on, 0.25f);
+        for (int i = 0; i < 6; i++) {                           // too cool: nodding to the beat
+            F f = smirk(squirtSit(OPEN, i % 3));
+            shades(f, 0, 0, (i + 1) % 4);
+            f.put(leg(p, new float[][] {{27, 34}, {32, 29}, {33, 25}}, 3, FUR, 0), 0, 0);   // thumbs up
+            if (i % 2 == 1) {
+                f.shift(0, 1);
+            }
+            s.add(f, 0.2f);
+        }
+        F flip = squirtSit(HAPPY, 0);                           // flips them off with a grin
+        shades(flip, 0, -6, -1);
+        s.add(flip, 0.1f);
+        F gone = squirtSit(HAPPY, 1);
+        shades(gone, 2, -13, -1);
+        s.add(gone, 0.1f);
+        s.add(squirtSit(HAPPY, 0), 0.3f);
         s.add(squirtSit(OPEN, 0), 0.2f);
         return s.anim();
     }

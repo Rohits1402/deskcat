@@ -715,6 +715,17 @@ every pose must read as the same animal as the sitting drawing.
   the baked frames (`ReminderArt.eyes()`, used by reminders, tricks and
   carry) all draw it; the side-view walk eye got the same white + iris.
 
+## 33. Squirtle Squad
+
+- Squirtle gets a second click trick (`TrickArt.click2()`), alternating
+  with Rapid Spin: it rummages behind the rim of its shell (its pocket),
+  pulls out folded shades, unfolds them in front of its face, puts them
+  on with a glint, then smirks with a thumbs-up and nods along before
+  flipping them off. The first draft had the shades fly in from nowhere;
+  the user wanted them taken out of a pocket.
+- CatApp caches a 4th trick slot (`TRICK_CLICK2`); `attack()` alternates
+  (`altClick`) when a skin has one, and click-spam counting covers both.
+
 ## Current state
 
 - **Skins**: Squirtle (default), Pikachu, the original orange tabby, black

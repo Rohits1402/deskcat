@@ -252,14 +252,16 @@ public class CatApp extends ApplicationAdapter {
 
     // click tricks and idle fidgets (TrickArt); travelling ones move the
     // window by their per-frame offsets from where they started
-    private static final int TRICK_FIDGET = 0, TRICK_CLICK = 1, TRICK_ANNOYED = 2;
+    private static final int TRICK_FIDGET = 0, TRICK_CLICK = 1, TRICK_ANNOYED = 2,
+            TRICK_CLICK2 = 3;   // a second click trick some skins alternate with
     /** Clicks during one trick that make the pet annoyed afterwards. */
     private static final int SPAM_CLICKS = 3;
-    private final ReminderArt.Anim[] trickAnims = new ReminderArt.Anim[3];
-    private final Texture[][] trickTexs = new Texture[3][];
+    private final ReminderArt.Anim[] trickAnims = new ReminderArt.Anim[4];
+    private final Texture[][] trickTexs = new Texture[4][];
     private ReminderArt.Anim trickAnim;
     private Texture[] trickTex;
     private int trickKind, clickSpam;
+    private boolean altClick;
     private float trickT;
     private int trickX, trickY;
     private float fidgetIn = MathUtils.random(25f, 60f);
@@ -1362,8 +1364,12 @@ public class CatApp extends ApplicationAdapter {
     /** Build this skin's trick, fidget and annoyed frames once, up front. */
     private void loadTricks() {
         disposeTricks();
-        ReminderArt.Anim[] a = {TrickArt.fidget(skin), TrickArt.click(skin), TrickArt.annoyed(skin)};
+        ReminderArt.Anim[] a = {TrickArt.fidget(skin), TrickArt.click(skin), TrickArt.annoyed(skin),
+                TrickArt.click2(skin)};
         for (int k = 0; k < a.length; k++) {
+            if (a[k] == null) {
+                continue;   // no second trick for this skin
+            }
             trickAnims[k] = a[k];
             trickTexs[k] = new Texture[a[k].frames.length];
             for (int i = 0; i < a[k].frames.length; i++) {
@@ -1430,7 +1436,8 @@ public class CatApp extends ApplicationAdapter {
             return;
         }
         if (trickT >= trickAnim.duration()) {
-            boolean spammed = trickKind == TRICK_CLICK && clickSpam >= SPAM_CLICKS;
+            boolean spammed = (trickKind == TRICK_CLICK || trickKind == TRICK_CLICK2)
+                    && clickSpam >= SPAM_CLICKS;
             endTrick();
             clickSpam = 0;
             if (spammed) {                         // clicked over and over: fed up
@@ -1516,7 +1523,7 @@ public class CatApp extends ApplicationAdapter {
     private void attack() {
         wake();
         if (trickAnim != null && trickKind != TRICK_FIDGET) {
-            if (trickKind == TRICK_CLICK) {
+            if (trickKind == TRICK_CLICK || trickKind == TRICK_CLICK2) {
                 clickSpam++;
             }
             return;
@@ -1530,7 +1537,10 @@ public class CatApp extends ApplicationAdapter {
         }
         playVoice();
         clickSpam = 0;
-        startTrick(TRICK_CLICK);
+        // skins with two click tricks take turns
+        boolean second = trickAnims[TRICK_CLICK2] != null && altClick;
+        altClick = !altClick;
+        startTrick(second ? TRICK_CLICK2 : TRICK_CLICK);
     }
 
     private void playVoice() {
